@@ -1,0 +1,10 @@
+<li>
+  <div>
+    <% if author.icon %>
+      <img class="author avatar thumbnail" src="<%= author.icon %>"/>
+    <% end %>
+    <%= author.display_name %>
+    <small>@<%= author.handle %>@<%= author.id.host %></small>
+  </div>
+  <div><%= note.content %></div>
+</li>

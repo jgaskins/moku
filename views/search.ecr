@@ -1,0 +1,6 @@
+<%= results.size %> results
+<ul>
+  <% results.each do |(result, account)| %>
+    <% show result, account, response %>
+  <% end %>
+</ul>

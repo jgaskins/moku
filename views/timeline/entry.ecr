@@ -1,0 +1,22 @@
+<div class="timeline-entry">
+  <% if boosted_by %>
+    <div class="boosted-by">Boosted by <%= boosted_by.display_name %></div>
+  <% end %>
+
+  <span class="author display-name"><%= author.display_name %></span> <span class="author handle">@<%= author.handle %>@<%= author.id.host %></span>
+  <div><time><%= note.created_at %></time></div>
+  <article>
+    <%= note.content %>
+  </article>
+
+  <ul class="attachment-list">
+    <% attachments.each do |attachment| %>
+      <li class="attachment">
+        <% case attachment.media_type
+           when %r{\Aimage/} %>
+          <img src="<%= attachment.url %>"/>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+</div>

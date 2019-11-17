@@ -1,0 +1,26 @@
+version: 1.0
+shards:
+  amq-protocol:
+    github: cloudamqp/amq-protocol.cr
+    version: 0.3.3
+
+  amqp-client:
+    github: cloudamqp/amqp-client.cr
+    version: 0.4.5
+
+  dotenv:
+    github: drum445/dotenv
+    version: 0.3.0
+
+  neo4j:
+    path: ../neo4j.cr
+    version: 0.5.6
+
+  pool:
+    github: ysbaddaden/pool
+    version: 0.2.3
+
+  redis:
+    github: stefanwille/crystal-redis
+    version: 2.3.0
+

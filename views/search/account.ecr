@@ -1,0 +1,12 @@
+<li>
+  <% if account.icon %>
+    <div><img class="avatar thumbnail" src="<%= account.icon %>"/></div>
+  <% end %>
+  <div><%= account.display_name %></div>
+  <div>@<%= account.handle %>@<%= account.id.host %></div>
+  <form action="/follow" method="POST">
+    <input type="hidden" name="account_id" value="<%= account.id %>" />
+    <button>Follow</button>
+  </form>
+  <div><%= account.summary %></div>
+</li>
