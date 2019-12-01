@@ -10,8 +10,7 @@ targets:
 
 dependencies:
   neo4j:
-    # github: jgaskins/neo4j.cr
-    path: ../neo4j.cr
+    github: jgaskins/neo4j.cr
   redis:
     github: stefanwille/crystal-redis
   amqp-client:
