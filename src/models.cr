@@ -8,6 +8,20 @@ module PropertyConversion
     end
   end
 
+  module PossibleURI
+    def self.deserialize(url)
+      raise "Can't convert #{url.inspect} into a URI"
+    end
+
+    def self.deserialize(url : String) : ::URI
+      ::URI.parse url
+    end
+
+    def self.deserialize(url : Nil) : Nil
+      nil
+    end
+  end
+
   module Bcrypt
     def self.deserialize(string)
       Crypto::Bcrypt::Password.new(string.as(String))
@@ -20,14 +34,15 @@ struct Account
     id: { type: URI, converter: PropertyConversion::URI },
     handle: String,
     display_name: String,
-    summary: String,
+    summary: { type: String, default: "" },
     manually_approves_followers: Bool,
     discoverable: Bool,
     followers_url: { type: URI, converter: PropertyConversion::URI },
-    inbox_url: { type: URI?, converter: PropertyConversion::URI, default: nil },
+    inbox_url: { type: URI?, converter: PropertyConversion::PossibleURI, default: nil },
     shared_inbox: { type: URI, converter: PropertyConversion::URI },
-    icon: { type: URI?, converter: PropertyConversion::URI, default: nil },
-    image: { type: URI?, converter: PropertyConversion::URI, default: nil },
+    icon: { type: URI?, converter: PropertyConversion::PossibleURI, default: nil },
+    image: { type: URI?, converter: PropertyConversion::PossibleURI, default: nil },
+    created_at: Time?,
   )
 
   property? manually_approves_followers = false
@@ -45,6 +60,7 @@ struct Account
     @image = nil,
     @manually_approves_followers = false,
     @discoverable = true,
+    @created_at = Time.utc,
   )
     @node_id = -1
     @node_labels = %w[]
@@ -56,15 +72,39 @@ struct LocalAccount
     id: { type: URI, converter: PropertyConversion::URI },
     handle: String,
     display_name: String,
+    email: String,
     password: {type: Crypto::Bcrypt::Password, converter: PropertyConversion::Bcrypt},
     summary: String,
     manually_approves_followers: Bool,
     discoverable: Bool,
     followers_url: { type: URI, converter: PropertyConversion::URI },
     shared_inbox: { type: URI, converter: PropertyConversion::URI },
-    icon: { type: URI?, converter: PropertyConversion::URI, default: nil },
-    image: { type: URI?, converter: PropertyConversion::URI, default: nil },
+    icon: { type: URI?, converter: PropertyConversion::PossibleURI, default: nil },
+    image: { type: URI?, converter: PropertyConversion::PossibleURI, default: nil },
+    created_at: Time,
   )
+
+  property? manually_approves_followers = false
+  property? discoverable = true
+
+  def initialize(
+    @id,
+    @handle,
+    @display_name,
+    @email,
+    @password,
+    @summary = "",
+    @manually_approves_followers = false,
+    @discoverable = true,
+    @followers_url = URI.parse("#{id}/followers"),
+    @shared_inbox = URI.parse("https://#{id.host}/inbox"),
+    @icon = nil,
+    @image = nil,
+    @created_at = Time.utc,
+  )
+    @node_id = -1
+    @node_labels = %w[]
+  end
 end
 
 struct PartialAccount
@@ -107,7 +147,17 @@ struct Note
     cc: Array(String),
     sensitive: Bool,
     content: String,
+    like_count: { type: Int32, default: 0 },
   )
 
   property in_reply_to : URI? = nil
+
+  property? sensitive
+end
+
+struct PollOption
+  Neo4j.map_node(
+    name: String,
+    vote_count: Int32,
+  )
 end

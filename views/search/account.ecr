@@ -4,9 +4,17 @@
   <% end %>
   <div><%= account.display_name %></div>
   <div>@<%= account.handle %>@<%= account.id.host %></div>
-  <form action="/follow" method="POST">
-    <input type="hidden" name="account_id" value="<%= account.id %>" />
-    <button>Follow</button>
-  </form>
+
+  <% if pp i_follow %>
+    <form action="/unfollow" method="POST">
+      <input type="hidden" name="account_id" value="<%= account.id %>" />
+      <button>Unfollow</button>
+    </form>
+  <% else %>
+    <form action="/follow" method="POST">
+      <input type="hidden" name="account_id" value="<%= account.id %>" />
+      <button>Follow</button>
+    </form>
+  <% end %>
   <div><%= account.summary %></div>
 </li>

@@ -47,11 +47,11 @@ module Route
         end
 
         def {{method.id.downcase}}(capture : Symbol)
-          {{method.id.downcase}} { is(capture) { |capture| yield capture; handled! } }
+          is(capture) { |capture| yield {{method.id.downcase}} { capture } }
         end
 
         def {{method.id.downcase}}(path : String)
-          {{method.id.downcase}} { is(path) { yield; handled! } }
+          is(path) { {{method.id.downcase}} { yield } }
         end
       {% end %}
     end
@@ -61,7 +61,7 @@ module Route
     def is(path : String = "")
       return if handled?
 
-      if path.sub(%r(/), "") == @request.path.sub(%r(/), "")
+      if path.sub(%r(\A/), "") == @request.path.sub(%r(\A/), "")
         yield
         handled!
       end
@@ -83,7 +83,7 @@ module Route
 
     def on(*paths : String)
       paths.each do |path|
-        on(path) { yield; handled! }
+        on(path) { yield }
       end
     end
 
@@ -95,7 +95,6 @@ module Route
           old_path = @request.path
           @request.path = @request.path.sub(/\A\/?#{path}/, "")
           yield
-          handled!
         ensure
           @request.path = old_path.not_nil!
         end
@@ -111,7 +110,6 @@ module Route
         @request.path = @request.path.sub(%r(\A/#{match[0]}), "")
 
         yield match[0]
-        handled!
       end
     ensure
       if old_path
@@ -147,11 +145,11 @@ module Route
     end
 
     def handled?
-      @handled
+      @request.handled?
     end
 
     def handled!
-      @handled = true
+      @request.handled!
     end
   end
 
@@ -354,5 +352,10 @@ module HTTP
     # We mutate the request path as we traverse the routing tree so we need to
     # be able to know the original path.
     property! original_path : String
+    getter? handled = false
+
+    def handled!
+      @handled = true
+    end
   end
 end

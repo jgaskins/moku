@@ -1,3 +1,5 @@
+require "crypto/bcrypt/password"
+
 require "../../src/database"
 require "../../src/sign"
 
@@ -9,6 +11,8 @@ module Factories
       user = DB::CreateLocalAccount[
         handle: handle,
         name: handle,
+        email: "#{handle}@#{Moku::SELF.host}",
+        password: Crypto::Bcrypt::Password.create("password", cost: 4),
         id: URI.parse("#{Moku::SELF}/users/#{handle}"),
         public_key: key.public_key_pem,
         private_key: key.private_key_pem,

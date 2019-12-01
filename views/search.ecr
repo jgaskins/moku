@@ -1,6 +1,6 @@
 <%= results.size %> results
 <ul>
-  <% results.each do |(result, account)| %>
-    <% show result, account, response %>
+  <% results.each do |(result, account, i_follow)| %>
+    <% show result, account, i_follow, response %>
   <% end %>
 </ul>

@@ -1,0 +1,40 @@
+<% note_url = "/notes/#{URI.encode_www_form note.id.to_s}" %>
+
+<div>
+  <% if author.icon %>
+    <img class="author avatar thumbnail" src="<%= author.icon %>" />
+  <% end %>
+  <strong><%= author.display_name %></strong>
+  <code>@<%= author.handle %><% if author.id.host != SELF.host %><span class="account-host">@<%= author.id.host %></span><% end %></code>
+  <div>
+    <a href="<%= note.id %>"><time><%= note.created_at %></time></a>
+  </div>
+</div>
+
+<article><%= note.content %></article>
+
+<ul class="attachment-list">
+  <% attachments.each do |attachment| %>
+    <li class="attachment">
+      <% case attachment.media_type
+         when /\Aimage/ %>
+        <a href="<%= attachment.url %>"><img src="<%= attachment.url %>"/></a>
+      <% when /\Avideo/ %>
+        <video src="<%= attachment.url %>" controls />
+      <% end %>
+    </li>
+  <% end %>
+</ul>
+
+<ul>
+  <li>
+    <form action="<%= note_url %>/like" method="POST">
+      <button class="<%= "i-liked" if i_liked %>">👍</button>
+    </form>
+  </li>
+  <li>
+    <form action="<%= note_url %>/boost" method="POST">
+      <button>🔃</button>
+    </form>
+  </li>
+</ul>

@@ -7,7 +7,7 @@ module Moku
 
   # This needs to be the base URL at which this server is being run. For
   # example: https://my-instance.com
-  SELF = ENV["SELF"]
+  SELF = URI.parse(ENV["SELF"])
   puts "Configured Moku server to run at #{SELF}"
 
   ACTIVITY_QUEUE = Channel(ActivityPub::Activity).new(64)

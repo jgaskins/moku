@@ -1,22 +1,71 @@
+<% note_url = "/notes/#{URI.encode_www_form note.id.to_s}" %>
+
 <div class="timeline-entry">
   <% if boosted_by %>
     <div class="boosted-by">Boosted by <%= boosted_by.display_name %></div>
   <% end %>
 
-  <span class="author display-name"><%= author.display_name %></span> <span class="author handle">@<%= author.handle %>@<%= author.id.host %></span>
-  <div><time><%= note.created_at %></time></div>
+  <% if author.icon %>
+    <img class="author avatar thumbnail" src="<%= author.icon %>" />
+  <% end %>
+  <a href="<%= author.id %>">
+    <span class="author display-name"><%= author.display_name %></span>
+    <span class="author handle">@<%= author.handle %>@<%= author.id.host %></span>
+  </a>
+  <div><time><a href="/notes/<%= URI.encode_www_form note.id.to_s %>"><%= note.created_at %></a></time></div>
   <article>
+    <% if note.sensitive? %>
+      <details>
+        <summary><em><%= note.summary %></em></summary>
+    <% end %>
+
     <%= note.content %>
+
+    <ul class="attachment-list">
+      <% attachments.each do |attachment| %>
+        <li class="attachment">
+          <% case attachment.media_type
+             when %r{\Aimage/} %>
+            <a href="<%= attachment.url %>"><img src="<%= attachment.url %>"/></a>
+          <% when %r{\Avideo/} %>
+            <video src="<%= attachment.url %>" controls />
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+
+    <% if note.sensitive? %>
+      </details>
+    <% end %>
   </article>
 
-  <ul class="attachment-list">
-    <% attachments.each do |attachment| %>
-      <li class="attachment">
-        <% case attachment.media_type
-           when %r{\Aimage/} %>
-          <img src="<%= attachment.url %>"/>
-        <% end %>
+  <ul>
+    <% poll_total_votes = poll_options.reduce(0) { |total, option| total + option.vote_count } %>
+    <% poll_options.each do |option| %>
+      <li class="poll-option" style="width: <%= option.vote_count * 100 / poll_total_votes %>%">
+        <span class="poll-option-name"><%= option.name %></span>
+        <span class="poll-option-percentage"><%= (option.vote_count * 100 / poll_total_votes).round.to_i %>%</span>
       </li>
     <% end %>
   </ul>
+
+  <dl>
+    <dt>Likes</dt>
+    <dd><%= note.like_count %></dd>
+  </dl>
+
+  <% if current_user %>
+    <ul class="note-actions">
+      <li class="note-action">
+        <form action="<%= note_url %>/like" method="POST">
+          <button class="<%= "i-liked" if i_liked %>">👍</button>
+        </form>
+      </li>
+      <li class="note-action">
+        <form action="<%= note_url %>/boost" method="POST">
+          <button class="<%= "i-boosted" if i_boosted %>">🔃</button>
+        </form>
+      </li>
+    </ul>
+  <% end %>
 </div>

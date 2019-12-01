@@ -44,65 +44,98 @@ module DB
     end
 
     def connection
-      @pool.connection { |c| yield c }
+      @pool.connection do |c|
+        yield c
+      rescue ex
+        c.reset
+        raise ex
+      end
     end
 
     # exec_cast(query, {User, Group}, user_id: params["id"])
     def exec_cast(_query : String, _types : Tuple(*TYPES), **params) forall TYPES
-      LOGGER.debug do
-        String.build do |str|
-          str.puts "CYPHER"
-          str.puts _query
-          str.puts _types.pretty_inspect
-          str.puts params.pretty_inspect
-        end
-      end
-      connection do |connection|
-        connection.exec_cast _query, params, _types
-      end
+      exec_cast _query, _types, Neo4j::Map.from(params)
     end
 
     def exec_cast(_query : String, _types : Tuple(*TYPES), **params, &) forall TYPES
-      LOGGER.debug do
-        String.build do |str|
-          str.puts "CYPHER"
-          str.puts _query
-          str.puts _types.pretty_inspect
-          str.puts params.pretty_inspect
-        end
-      end
-      connection do |connection|
-        connection.exec_cast _query, params, _types do |row|
-          yield row
-        end
+      exec_cast _query, _types, Neo4j::Map.from(params) do |row|
+        yield row
       end
     end
 
-    def exec_cast(query : String, types : Tuple(*TYPES), params : NamedTuple) forall TYPES
-      LOGGER.debug do
-        String.build do |str|
-          str.puts "CYPHER"
-          str.puts query
-          str.puts types.pretty_inspect
-          str.puts params.pretty_inspect
-        end
-      end
+    # def exec_cast(query : String, types : Tuple(*TYPES)) forall TYPES
+    #   exec_cast query, types, Neo4j::Map.new
+    # end
+
+    # def exec_cast(query : String, types : Tuple(*TYPES), &) forall TYPES
+    #   exec_cast query, types, Neo4j::Map.new do |row|
+    #     yield row
+    #   end
+    # end
+
+    def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map, &) forall TYPES
+      start = Time.utc
+      count = 0
       connection do |connection|
+        error = nil
         connection.exec_cast query, params, types do |row|
-          yield row
+          count += 1
+          yield row unless error
+
+        # We need to receive all of the results, so let's just keep going until
+        # we pull everything, but remember that we had an error.
+        rescue ex
+          error = ex
+        end
+
+        if error
+          raise error
         end
       end
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          types: types,
+          params: params,
+          result_count: count,
+          execution_time: Time.utc - start.not_nil!,
+        }
+      end
+    end
+
+    def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map) forall TYPES
+      start = Time.utc
+      results = connection do |connection|
+        connection.exec_cast query, params, types
+      end
+    ensure
+        LOGGER.debug do
+          {
+            query: self.class.name,
+            cypher: query,
+            types: types,
+            params: params,
+            result_count: results.try(&.size),
+            execution_time: Time.utc - start.not_nil!,
+          }
+        end
     end
 
     def execute(_query : String, **params)
+      start = Time.utc
+      results = connection(&.execute(_query, **params))
+    ensure
       LOGGER.debug do
-        String.build do |str|
-          str.puts "CYPHER"
-          str.puts _query
-          str.puts params.pretty_inspect
-        end
+        {
+          query: self.class.name,
+          cypher: _query,
+          params: params,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }
       end
-      connection(&.execute(_query, **params))
     end
 
     class Exception < ::DB::Exception
@@ -157,37 +190,98 @@ module DB
   end
 
   struct GetTimelineFor < Query
-    def call(user_id : String, &)
-      exec_cast <<-CYPHER, {Note, Account, Account?, Array(Attachment)}, id: user_id do |row|
-        MATCH (acct:LocalAccount { id: $id })
-        MATCH (acct)-[:SUBSCRIBED_TO]->(stream:Stream)
+    def call(user_id : String, older_than : Time? = nil, newer_than : Time? = nil, max limit = 25, &)
+      exec_cast(
+        <<-CYPHER,
+          WITH datetime({ year: 1990 }) AS oldest_time_we_care_about
+
+          MATCH (acct:LocalAccount { id: $id })
+          MATCH (acct)-[:SUBSCRIBED_TO]->(stream:Stream)
+          MATCH (note)-[:POSTED_IN]->(stream)
+
+          WITH DISTINCT note, oldest_time_we_care_about, acct
+
+          OPTIONAL MATCH (boosted_by)-[boosted:BOOSTED]->(note)
+
+          WITH note, boosted_by, boosted, coalesce(boosted.at, note.created_at) AS timestamp, acct
+
+          WHERE timestamp < coalesce($older_than, datetime())
+          AND timestamp > coalesce($newer_than, oldest_time_we_care_about)
+
+          WITH note, boosted_by, boosted, acct
+          ORDER BY timestamp DESC
+          LIMIT $limit
+
+          MATCH (author:Account)-[:POSTED]->(note)
+          OPTIONAL MATCH (note)-[:HAS_POLL_OPTION]->(poll_option)
+          OPTIONAL MATCH (note)-[:HAS_ATTACHMENT]->(attachment)
+          OPTIONAL MATCH (acct)-[i_liked:LIKED]->(note)
+          OPTIONAL MATCH (acct)-[i_boosted:BOOSTED]->(note)
+
+          RETURN note, author, boosted_by, collect(attachment) AS attachments, boosted.at, collect(poll_option) AS poll_options, i_liked IS NOT NULL AS i_liked, i_boosted IS NOT NULL AS i_boosted
+        CYPHER
+        {Note, Account, Account?, Array(Attachment), Time?, Array(PollOption), Bool, Bool},
+        id: user_id,
+        older_than: older_than,
+        newer_than: newer_than,
+        limit: limit,
+      ) { |row| yield row }
+    end
+  end
+
+  struct GetNoteWithID < Query
+    def call(id : URI) : Note?
+      exec_cast(<<-CYPHER, {Note}, Neo4j::Map { "id" => id.to_s }).first?.try(&.first)
+        MATCH (note:Note { id: $id })
+        RETURN note
+        LIMIT 1
+      CYPHER
+    end
+  end
+
+  struct GetNotesInStream < Query
+    def call(id : String, current_user_id : URI? = nil, limit = 1_000_000)
+      exec_cast <<-CYPHER, {Note, Account, Array(Attachment), Array(PollOption), Bool, Bool}, id: id, current_user_id: current_user_id ? current_user_id.to_s : nil, limit: limit do |row|
+        MATCH (stream:Stream { id: $id })
         MATCH (note)-[:POSTED_IN]->(stream)
-        MATCH (author)-[:POSTED]->(note)
-        OPTIONAL MATCH (boosted_by)-[boosted:BOOSTED]->(note)
+        MATCH (author:Account)-[:POSTED]->(note)
         OPTIONAL MATCH (note)-[:HAS_ATTACHMENT]->(attachment)
+        OPTIONAL MATCH (note)-[:HAS_POLL_OPTION]->(poll_option)
 
-        WITH note, author, boosted_by, attachment
-        ORDER BY coalesce(boosted.at, note.created_at) DESC
+        WITH note, author, attachment, poll_option
+        ORDER BY note.created_at DESC
 
-        RETURN note, author, boosted_by, collect(attachment) AS attachments
+        OPTIONAL MATCH (current_user:LocalAccount { id: $current_user_id })
+        OPTIONAL MATCH (current_user)-[i_liked:LIKED]->(note)
+        OPTIONAL MATCH (current_user)-[i_boosted:BOOSTED]->(note)
+
+        RETURN note, author, collect(attachment) AS attachments, collect(poll_option) AS poll_options, i_liked IS NOT NULL AS i_liked, i_boosted IS NOT NULL AS i_boosted
+        LIMIT $limit
       CYPHER
         yield row
       end
     end
   end
 
-  struct GetNotesInStream < Query
-    def call(id : String)
-      exec_cast <<-CYPHER, {Note, Account, Array(Attachment)}, id: id do |row|
-        MATCH (stream:Stream { id: $id })
-        MATCH (note)-[:POSTED_IN]->(stream)
-        MATCH (author)-[:POSTED]->(note)
+  struct GetThreadFor < Query
+    def call(id : URI, current_user : LocalAccount?)
+      exec_cast <<-CYPHER, {Note, Account, Array(Attachment), Bool, Bool}, id: id.to_s, current_user_id: current_user.try(&.id.to_s) do |row|
+        MATCH (selected:Note { id: $id })
+        MATCH (note:Note)
+        WHERE (note)-[:IN_REPLY_TO*0..]->(selected)
+        OR (selected)-[:IN_REPLY_TO*0..]->(note)
+
+        WITH note
+
+        MATCH (author:Account)-[:POSTED]->(note)
         OPTIONAL MATCH (note)-[:HAS_ATTACHMENT]->(attachment)
 
-        WITH note, author, attachment
-        ORDER BY note.created_at DESC
+        OPTIONAL MATCH (current_user:LocalAccount { id: $current_user_id })
+        OPTIONAL MATCH (current_user)-[i_liked:LIKED]->(note)
+        OPTIONAL MATCH (current_user)-[i_boosted:BOOSTED]->(note)
 
-        RETURN note, author, collect(attachment) AS attachments
+        RETURN DISTINCT note, author, collect(attachment) AS attachments, i_liked IS NOT NULL AS i_liked, i_boosted IS NOT NULL AS i_boosted
+        ORDER BY note.created_at
       CYPHER
         yield row
       end
@@ -331,7 +425,8 @@ module DB
             followee.created_at = datetime(),
             followee.updated_at = datetime()
 
-        MERGE (follower)-[:WANTS_TO_FOLLOW { sent_at: datetime() }]->(followee)
+        MERGE (follower)-[request:WANTS_TO_FOLLOW]->(followee)
+        ON CREATE SET request.sent_at = datetime()
       CYPHER
     end
   end
@@ -389,10 +484,28 @@ module DB
     end
   end
 
-  struct Unfollow < Query
+  struct AlreadyFollows < Query
+    def call(follower_id : URI, followee_id : URI) : Bool
+      exec_cast(<<-CYPHER, {Bool}, follower_id: follower_id.to_s, followee_id: followee_id.to_s).first.first
+        OPTIONAL MATCH (follower:Account { id: $follower_id })
+        OPTIONAL MATCH (followee:Account { id: $followee_id })
+
+        OPTIONAL MATCH (follower)-[follow:FOLLOWS|WANTS_TO_FOLLOW]->(followee)
+
+        RETURN follow IS NOT NULL
+        LIMIT 1
+      CYPHER
+    end
+
+    def call(follower_id : Nil, followee_id : URI) : Bool
+      false
+    end
+  end
+
+  struct UnfollowAccount < Query
     def call(follower_id : URI, followee_id : URI)
       execute <<-CYPHER, follower_id: follower_id.to_s, followee_id: followee_id.to_s
-        MATCH (follower:Account { id: $follower_id })-[follow:FOLLOWS]->(followee:Account { id: $followee_id })
+        MATCH (follower:Account { id: $follower_id })-[follow:FOLLOWS|WANTS_TO_FOLLOW]->(followee:Account { id: $followee_id })
 
         DELETE follow
       CYPHER
@@ -412,8 +525,8 @@ module DB
       outbox_url : URI = id.dup.tap { |uri| uri.path += "/outbox" },
       shared_inbox : URI = id.dup.tap { |uri| uri.path = "/inbox" },
       _labels = %w[Account LocalAccount Person],
-    ) : Account
-      result = exec_cast <<-CYPHER, {Account},
+    ) : LocalAccount
+      result = exec_cast <<-CYPHER, {LocalAccount},
         CREATE (acct:#{_labels.join(':')} {
           id: $id,
           handle: $handle,
@@ -465,18 +578,25 @@ module DB
       to : Array(String),
       cc : Array(String),
       url : URI,
+      in_reply_to : URI?,
       summary : String? = nil,
       attachments : Array(ActivityPub::Object | ActivityPub::Activity) = Array(ActivityPub::Object | ActivityPub::Activity).new,
       sensitive : Bool = false,
       type : String = "Note",
+      poll_options : Array(ActivityPub::Object)? = nil,
     )
       execute <<-CYPHER,
-        MATCH (acct:Person { id: $account_id })
+        MERGE (acct:Person { id: $account_id })
+          ON CREATE SET acct:PartialAccount
+
+        WITH acct
+
         OPTIONAL MATCH (acct)-[:HAS_OUTBOX_STREAM]->(outbox)
-        MERGE (note:Note { id: $id })
+        MERGE (note:Note:Replyable { id: $id })
           ON CREATE SET
+            note.created_at = $created_at
+          SET
             note.content = $content,
-            note.created_at = $created_at,
             note.summary = $summary,
             note.to = $to,
             note.cc = $cc,
@@ -484,12 +604,32 @@ module DB
             note.url = $url,
             note.type = $type
 
+        // Add this note as a reply to the specified one
+        FOREACH (ignored IN CASE $in_reply_to WHEN NULL THEN [] ELSE [1] END |
+          MERGE (in_reply_to:Replyable { id: $in_reply_to })
+            ON CREATE SET in_reply_to:PartialReplyable
+          MERGE (note)-[:IN_REPLY_TO]->(in_reply_to)
+          SET note:Reply
+        )
+        // If $in_reply_to is nil, we mark it as an original post
+        FOREACH (ignored IN CASE $in_reply_to WHEN NULL THEN [1] ELSE [] END |
+          SET note:OriginalPost
+        )
+        // I wish Cypher had a more expressive approach for this, tbh, but
+        // unfortunately CASE is only for expressions and Cypher doesn't let you
+        // use it for side effects, so we have to do the FOREACH/CASE hack.
+
         MERGE (acct)-[:POSTED]->(note)
         WITH note, outbox
 
         UNWIND filter(stream IN $to + $cc + [outbox.id] WHERE stream IS NOT NULL) AS stream_id
         MERGE (stream:Stream { id: stream_id })
         MERGE (note)-[:POSTED_IN]->(stream)
+
+        FOREACH (poll_option in $poll_options |
+          MERGE (note)-[:HAS_POLL_OPTION]->(option:PollOption { name: poll_option.name })
+            SET option.vote_count = poll_option.vote_count
+        )
 
         WITH DISTINCT note
         UNWIND $attachments AS attachment
@@ -510,12 +650,19 @@ module DB
         cc: cc.map(&.as(Neo4j::Value)),
         sensitive: sensitive,
         url: url.to_s,
+        in_reply_to: in_reply_to && in_reply_to.to_s,
         attachments: attachments.map { |attachment|
           Neo4j::Map {
             "type" => attachment.type,
             "media_type" => attachment.media_type,
             "url" => attachment.url.to_s,
           }.as(Neo4j::Value)
+        },
+        poll_options: (poll_options || Array(ActivityPub::Object).new).map { |option|
+          Neo4j::Map {
+            "name" => option.name,
+            "vote_count" => (option.replies.try(&.total_items) || 0).to_i64,
+          }.as Neo4j::Value
         },
         type: type # Not sure if this will ever be needed, but it might be useful
     end
@@ -540,7 +687,9 @@ module DB
           sensitive: $note_properties.sensitive
         })
         MERGE (actor)-[boost:BOOSTED]->(note)
-          ON CREATE SET boost.at = datetime()
+          ON CREATE SET
+            boost.at = datetime(),
+            boost.id = $boost_id
 
         WITH note
         UNWIND $announcement.to + $announcement.cc AS stream_id
@@ -559,6 +708,7 @@ module DB
       CYPHER
         actor_id: actor_id.to_s,
         op_id: note.attributed_to.as(URI).to_s,
+        boost_id: announcement.id.as(URI).to_s,
         announcement: Neo4j::Map {
           "to" => announcement.to.as(Array).map(&.as(Neo4j::Value)),
           "cc" => announcement.cc.as(Array).map(&.as(Neo4j::Value)),
@@ -599,16 +749,92 @@ module DB
     end
   end
 
+  struct IsAlreadyLikedBy < Query
+    def call(note_id : URI, actor : LocalAccount)
+      exec_cast(<<-CYPHER, {Bool}, note_id: note_id.to_s, actor_id: actor.id.to_s).first.first
+        OPTIONAL MATCH (:LocalAccount { id: $actor_id })-[like:LIKED]->(:Note { id: $note_id })
+        RETURN like IS NOT NULL AS liked
+        LIMIT 1
+      CYPHER
+    end
+
+    def call(note_id : URI, actor : Nil)
+      false
+    end
+  end
+
+  struct IsAlreadyBoostedBy < Query
+    def call(note_id : URI, actor : LocalAccount) : URI?
+      exec_cast(<<-CYPHER, {String?}, note_id: note_id.to_s, actor_id: actor.id.to_s).first.first.try { |id| URI.parse id }
+        OPTIONAL MATCH (:LocalAccount { id: $actor_id })-[boost:BOOSTED]->(:Note { id: $note_id })
+        RETURN boost.id
+        LIMIT 1
+      CYPHER
+    end
+
+    def call(note_id : URI, actor : Nil)
+      false
+    end
+  end
+
+  struct AuthorOf < Query
+    def call(note_id : URI)
+      exec_cast(<<-CYPHER, {Account}, note_id: note_id.to_s).first.first
+        MATCH (author:Account)-[:POSTED]->(:Note { id: $note_id })
+        RETURN author
+      CYPHER
+    end
+  end
+
   struct DeleteNote < Query
     def call(note_id : URI, actor_id : URI)
       execute <<-CYPHER,
         MATCH (acct:Account { id: $actor_id })-[action:POSTED]->(note:Note { id: $note_id })-[stream_entry:POSTED_IN]->(stream)
-        MATCH (note)-[attach:HAS_ATTACHMENT]->(attachment)
+        OPTIONAL MATCH (note)-[attach:HAS_ATTACHMENT]->(attachment)
+        OPTIONAL MATCH (note)-[reply:IN_REPLY_TO]->()
 
-        DELETE action, note, stream_entry, attach, attachment
+        DELETE action, note, stream_entry, attach, attachment, reply
       CYPHER
         note_id: note_id.to_s,
         actor_id: actor_id.to_s
+    end
+  end
+
+  struct DeleteObject < Query
+    def call(object_id : URI)
+      execute <<-CYPHER, object_id: object_id.to_s
+        MATCH (object { id: $object_id })
+        DETACH DELETE object
+      CYPHER
+    end
+  end
+
+  struct Like < Query
+    def call(actor_id : URI, object_id : URI)
+      execute <<-CYPHER,
+        MATCH (acct:Account { id: $actor_id })
+        MATCH (object:Note { id: $object_id }) // TODO: Make this more than a Note!
+
+        MERGE (acct)-[:LIKED]->(object)
+        SET object.like_count = coalesce(object.like_count, 0) + 1
+      CYPHER
+        actor_id: actor_id.to_s,
+        object_id: object_id.to_s
+    end
+  end
+
+  struct Unlike < Query
+    def call(actor_id : URI, object_id : URI)
+      execute <<-CYPHER,
+        MATCH (acct:Account)-[like:LIKED|LIKES]->(object)
+        WHERE acct.id = $actor_id
+        AND object.id = $object_id
+
+        DELETE like
+        SET object.like_count = object.like_count - 1
+      CYPHER
+        actor_id: actor_id.to_s,
+        object_id: object_id.to_s
     end
   end
 
@@ -627,7 +853,7 @@ module DB
     def call
       uris = Array(URI).new
 
-      exec_cast <<-CYPHER, {String}, NamedTuple.new do |(url)|
+      exec_cast <<-CYPHER, {String} do |(url)|
         MATCH (partial:PartialAccount)
         RETURN partial.id
       CYPHER
@@ -666,7 +892,7 @@ module DB
             person.image = $image,
             person.updated_at = datetime(),
             person:Account,
-            person:#{account.id.host == URI.parse(Moku::SELF).host ? "LocalAccount" : "RemoteAccount"}
+            person:#{account.id.host == Moku::SELF.host ? "LocalAccount" : "RemoteAccount"}
 
           REMOVE person:PartialAccount
         CYPHER
@@ -687,31 +913,36 @@ module DB
 
   struct GetNodeInfo < Query
     def call : NodeInfo
-      result = exec_cast(<<-CYPHER, {Int32, Int32, Int32, Int32, Bool}).first
+      result = exec_cast(<<-CYPHER, {Int32, Int32, Int32, Int32, Bool, Bool}).first
         MATCH (all_accts:LocalAccount)
         WITH all_accts
 
         OPTIONAL MATCH (monthly_active:LocalAccount)-[:POSTED]->(note)
         WHERE note.created_at > datetime() - duration({ months: 1 })
-        OPTIONAL MATCH (half_yearly_active)-[:BOOSTED]->(boosted)
-        WHERE boosted.created_at > datetime() - duration({ months: 6 })
-        WITH all_accts, monthly_active
+        WITH all_accts, count(distinct monthly_active) as posts_in_last_month
 
         OPTIONAL MATCH (half_yearly_active:LocalAccount)-[:POSTED]->(note)
         WHERE note.created_at > datetime() - duration({ months: 6 })
-        OPTIONAL MATCH (half_yearly_active)-[:BOOSTED]->(boosted)
-        WHERE boosted.created_at > datetime() - duration({ months: 6 })
-        WITH all_accts, monthly_active, half_yearly_active
+        WITH all_accts, posts_in_last_month, count(distinct half_yearly_active) as posts_in_last_half_year
+
+        OPTIONAL MATCH (monthly_active:LocalAccount)-[:BOOSTED]->(note)
+        WHERE note.created_at > datetime() - duration({ months: 1 })
+        WITH all_accts, posts_in_last_month, posts_in_last_half_year, count(distinct monthly_active) as boosts_in_last_month
+
+        OPTIONAL MATCH (half_yearly_active:LocalAccount)-[:POSTED]->(note)
+        WHERE note.created_at > datetime() - duration({ months: 6 })
+        WITH all_accts, posts_in_last_month, posts_in_last_half_year, boosts_in_last_month, count(distinct half_yearly_active) as boosts_in_last_half_year
 
         OPTIONAL MATCH (all_accts)-[:POSTED]->(local_post)
         OPTIONAL MATCH (all_accts)-[:BOOSTED]->(local_boost)
 
         RETURN
           count(all_accts) AS total_users,
-          count(monthly_active) AS monthly_active,
-          count(half_yearly_active) AS half_yearly_active,
+          posts_in_last_month + boosts_in_last_month AS monthly_active,
+          posts_in_last_half_year + boosts_in_last_half_year AS half_yearly_active,
           count(local_post) + count(local_boost) AS local_posts,
-          true AS open_registrations
+          true AS open_registrations,
+          false AS approval_required
       CYPHER
 
       NodeInfo.new(*result)
@@ -722,18 +953,36 @@ module DB
       monthly_active_users : Int32,
       half_yearly_active_users : Int32,
       local_posts : Int32,
-      open_registrations : Bool
+      open_registrations : Bool,
+      approval_required : Bool
+  end
+
+  struct ListAdmins < Query
+    def call(limit = 10) : Array(LocalAccount)
+      admins = Array(LocalAccount).new
+
+      exec_cast <<-CYPHER, {LocalAccount}, limit: limit do |(admin)|
+        MATCH (admin:Admin)
+        RETURN admin
+        LIMIT $limit
+      CYPHER
+        admins << admin
+      end
+
+      admins
+    end
   end
 
   struct Search < Query
     alias Result = Note | Account
 
-    def call(query : String) : Array({Result, Account?})
-      exec_cast <<-CYPHER, {Result, Account?}, query: query
+    def call(query : String, searcher : LocalAccount?) : Array({Result, Account?, Bool})
+      exec_cast <<-CYPHER, {Result, Account?, Bool}, query: query, my_id: searcher.try(&.id.to_s)
         CALL db.index.fulltext.queryNodes('search_everything', $query) YIELD node, score
         MATCH (node)
         OPTIONAL MATCH (account)-[:POSTED]->(node)
-        RETURN node, account
+        OPTIONAL MATCH (:LocalAccount { id: $my_id })-[follow:FOLLOWS]->(node)
+        RETURN node, account, follow IS NOT NULL
         ORDER BY score DESC
       CYPHER
     end
@@ -745,7 +994,6 @@ module DB
       # Unique indexes
       {
         LocalAccount: %w[handle email],
-        RemoteAccount: %w[handle email],
         Note: %w[id],
         Stream: %w[id],
         Person: %w[id],
@@ -814,5 +1062,22 @@ module DB
         MERGE (follower)-[:SUBSCRIBED_TO]->(stream)
       CYPHER
     end
+  end
+end
+
+class Hash(K, V)
+  def self.from(nt : NamedTuple)
+    nt.each_with_object(new) do |key, value, hash|
+      hash[key.to_s] = value
+    end
+  end
+end
+
+struct NamedTuple
+  def each_with_object(obj : T) : T forall T
+    each do |key, value|
+      yield key, value, obj
+    end
+    obj
   end
 end

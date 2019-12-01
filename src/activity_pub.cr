@@ -36,7 +36,7 @@ module ActivityPub
       start_time: { type: Time?, key: "startTime" },
       summary: String?,
       summary_map: { type: Hash(String, String)?, key: "summaryMap" },
-      tag: Array(Object)?,
+      tag: Object | Array(Object) | Nil,
       updated: Time?,
       url: URI?,
       to: Array(String)?,
@@ -45,6 +45,9 @@ module ActivityPub
       bcc: Array(String)?,
       media_type: { type: String?, key: "mediaType" },
       duration: String?,
+      discoverable: { type: Bool?, default: false },
+      creator: URI?,
+      one_of: { type: Array(Object)?, key: "oneOf" },
     }
     JSON.mapping({{ATTRIBUTES}})
 
@@ -69,7 +72,6 @@ module ActivityPub
 
   class Activity
     DEFAULT_CONTEXT = JSON::Any.new("https://www.w3.org/ns/activitystreams")
-    # alias ContextType = String | Hash(String, String | ContextType)
 
     {% begin %}
     JSON.mapping({
@@ -81,6 +83,7 @@ module ActivityPub
       result: Value?,
       origin: Value?,
       instrument: Value?,
+      signature: Object?,
     })
     {% end %}
 
@@ -118,7 +121,7 @@ module ActivityPub
       featured: URI,
       preferred_username: { type: String, key: "preferredUsername" },
       name: String,
-      summary: String,
+      summary: { type: String, default: "" },
       manually_approves_followers: { type: Bool?, default: false, key: "manuallyApprovesFollowers" },
       discoverable: { type: Bool?, default: false },
       public_key: { type: PublicKey, key: "publicKey" },
@@ -169,10 +172,10 @@ module ActivityPub
     include Enumerable(T)
 
     JSON.mapping(
-      id: URI,
+      id: URI?,
       type: String,
       total_items: { type: UInt64?, key: "totalItems" },
-      first: Value,
+      first: Value?,
     )
 
     def initialize(
@@ -283,6 +286,14 @@ module ActivityPub
       def initialize(@uri : URI)
         @current_index = 0
         @current_page = Page(T).from_json(ActivityPub.get(@uri).body)
+      end
+
+      def initialize(activity : Activity)
+        initialize activity.id.not_nil!
+      end
+
+      def initialize(object : Object)
+        initialize object.id.not_nil!
       end
 
       def next : T | Stop

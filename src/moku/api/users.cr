@@ -4,6 +4,8 @@ require "../../activity_pub"
 require "../config"
 
 require "../../services/fetch_remote_account"
+require "../../services/send_activity"
+require "../../services/reify_partial_accounts"
 
 module Moku; struct API; struct Users
   include Route
@@ -134,6 +136,8 @@ module Moku; struct API; struct Users
         handle_create activity
       when "Undo"
         handle_undo activity
+      when "Like"
+        handle_like activity
       else
         pp activity
       end
@@ -177,6 +181,7 @@ module Moku; struct API; struct Users
         created_at: object.published || Time.utc,
         summary: object.summary,
         url: object.url.not_nil!,
+        in_reply_to: object.in_reply_to,
         to: object.to || %w[],
         cc: object.cc || %w[],
       ]
@@ -186,14 +191,27 @@ module Moku; struct API; struct Users
       case (undone_activity = activity.object.as(ActivityPub::Activity)).type
       when "Follow"
         unfollow undone_activity
+      when "Like"
+        unlike undone_activity
       end
+    end
+
+    def handle_like(activity : ActivityPub::Activity)
+      DB::Like[activity.actor.as(URI), activity.object.as(URI)]
     end
 
     def unfollow(activity : ActivityPub::Activity)
       actor = activity.actor.as(URI)
       account = activity.object.as(URI)
 
-      DB::Unfollow[follower_id: actor, followee_id: account]
+      DB::UnfollowAccount[follower_id: actor, followee_id: account]
+    end
+
+    def unlike(activity : ActivityPub::Activity)
+      DB::Unlike[
+        actor_id: activity.actor.as(URI),
+        object_id: activity.object.as(URI),
+      ]
     end
 
     class Exception < ::Exception
@@ -371,7 +389,33 @@ module Moku; struct API; struct Users
     def call(context)
       route context do |r, response|
         r.on :id do |id|
-          pp r.original_path
+          id = URI.parse("#{SELF}#{r.original_path}")
+
+          if note = DB::GetNoteWithID[id]
+            ActivityPub::Object.new(
+              id: note.id,
+              type: note.type,
+              summary: note.summary,
+              in_reply_to: note.in_reply_to,
+              published: note.created_at,
+              url: note.url,
+              to: note.to,
+              cc: note.cc,
+              sensitive: note.sensitive || false,
+              content: note.content,
+              # content_map: object.content_map,
+              attachment: Array(ActivityPub::Value).new,
+              tag: Array(ActivityPub::Object).new,
+              replies: ActivityPub::Collection(ActivityPub::Object).new(
+                id: URI.parse("#{note.id}/replies"),
+                type: "Collection",
+                first: URI.parse("#{note.id}/replies/all"),
+              ),
+            ).to_json response
+          else
+            response.status = HTTP::Status::NOT_FOUND
+            { error: "Status #{r.original_path.to_s.inspect} not found" }.to_json response
+          end
         end
       end
     end
