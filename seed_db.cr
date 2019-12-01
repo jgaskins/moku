@@ -1,14 +1,18 @@
 require "dotenv"
 Dotenv.load
 
+require "crypto/bcrypt/password"
+
 require "./src/moku/config"
 require "./src/database"
 require "./src/sign"
 require "./src/activity_pub"
 
-admin = pp Account.new(
+admin = pp LocalAccount.new(
   id: URI.parse("#{Moku::SELF}/users/admin"),
   handle: "admin",
+  email: "admin@example.com",
+  password: Crypto::Bcrypt::Password.create("password"),
   display_name: "Admin",
   shared_inbox: URI.parse("#{Moku::SELF}/inbox"),
   followers_url: URI.parse("#{Moku::SELF}/users/admin/followers"),
@@ -28,6 +32,8 @@ DB::NEO4J_POOL.connection do |connection|
 
     WITH admin
     SET admin.id = $admin_id,
+      admin.email = $admin_email,
+      admin.password = $admin_password,
       admin.display_name = $admin_name,
       admin.discoverable = $admin_discoverable,
       admin.followers_url = $admin_followers_url,
@@ -46,6 +52,8 @@ DB::NEO4J_POOL.connection do |connection|
     admin_id: admin.id.to_s,
     admin_handle: admin.handle,
     admin_name: admin.display_name,
+    admin_email: admin.email,
+    admin_password: admin.password.to_s,
     admin_summary: admin.summary,
     admin_shared_inbox: admin.shared_inbox.to_s,
     admin_followers_url: admin.followers_url.to_s,
