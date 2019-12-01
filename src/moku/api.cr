@@ -343,7 +343,7 @@ struct Moku::API
 
     def call(context)
       route context do |r, response|
-        r.on "2.0" do
+        r.get "2.0" do
           node_info = DB::GetNodeInfo.call
 
           response.headers["Content-Type"] = "application/json"

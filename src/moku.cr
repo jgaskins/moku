@@ -511,7 +511,7 @@ module Moku
           end
         end
 
-        r.on "nodeinfo" do
+        r.get "nodeinfo" do
           response.headers["Content-Type"] = "application/json"
           {
             "links": [
