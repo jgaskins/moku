@@ -13,8 +13,8 @@ shards:
     version: 0.3.0
 
   neo4j:
-    path: ../neo4j.cr
-    version: 0.5.6
+    github: jgaskins/neo4j.cr
+    version: 0.5.7
 
   pool:
     github: ysbaddaden/pool
@@ -22,5 +22,5 @@ shards:
 
   redis:
     github: stefanwille/crystal-redis
-    version: 2.3.0
+    version: 2.5.0
 
