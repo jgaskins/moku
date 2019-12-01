@@ -527,20 +527,20 @@ module Moku
   end
 end
 
-require "amqp-client"
-spawn do
-  AMQP::Client.start(ENV["AMQP_URL"]? || "amqp://guest:guest@localhost") do |amqp|
-    amqp.channel do |channel|
-      exchange = channel.exchange("activities", "fanout")
+# require "amqp-client"
+# spawn do
+#   AMQP::Client.start(ENV["AMQP_URL"]? || "amqp://guest:guest@localhost") do |amqp|
+#     amqp.channel do |channel|
+#       exchange = channel.exchange("activities", "fanout")
 
-      puts "Beginning message loop"
-      loop do
-        activity = Moku::ACTIVITY_QUEUE.receive
-        exchange.publish activity.to_json, ""
-      end
-    end
-  end
-end
+#       puts "Beginning message loop"
+#       loop do
+#         activity = Moku::ACTIVITY_QUEUE.receive
+#         exchange.publish activity.to_json, ""
+#       end
+#     end
+#   end
+# end
 
 server = HTTP::Server.new([
   HTTP::LogHandler.new,
