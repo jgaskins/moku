@@ -14,7 +14,7 @@ shards:
 
   neo4j:
     github: jgaskins/neo4j.cr
-    version: 0.5.7
+    commit: e29477637d63c6566dde568153fcc1f26c032877
 
   pool:
     github: ysbaddaden/pool

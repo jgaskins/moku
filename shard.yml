@@ -11,6 +11,7 @@ targets:
 dependencies:
   neo4j:
     github: jgaskins/neo4j.cr
+    branch: add-cluster-support
   redis:
     github: stefanwille/crystal-redis
   amqp-client:
