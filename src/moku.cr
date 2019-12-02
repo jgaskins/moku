@@ -395,13 +395,15 @@ module Moku
 
     def call(context)
       route context do |r, response|
-        if query = r.params["query"]?
-          results = search_for(query)
-        else
-          results = Array(ResultRow).new
-        end
+        r.root do
+          if query = r.params["query"]?
+            results = search_for(query)
+          else
+            results = Array(ResultRow).new
+          end
 
-        render "search"
+          render "search"
+        end
       end
     end
 
