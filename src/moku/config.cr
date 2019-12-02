@@ -1,6 +1,8 @@
 require "amqp-client"
 require "dotenv"
-Dotenv.load
+unless ENV["SKIP_DOTENV"]?
+  Dotenv.load
+end
 
 module Moku
   VERSION = "0.1.0"

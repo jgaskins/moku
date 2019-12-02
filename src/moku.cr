@@ -1,5 +1,7 @@
 require "dotenv"
-Dotenv.load
+unless ENV["SKIP_DOTENV"]?
+  Dotenv.load
+end
 
 require "http"
 require "logger"
