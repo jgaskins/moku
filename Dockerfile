@@ -7,4 +7,4 @@ RUN shards build --release
 
 EXPOSE 8080/tcp
 
-CMD ["build/moku"]
+CMD ["bin/moku"]
