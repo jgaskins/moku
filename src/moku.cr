@@ -42,7 +42,7 @@ class Cache
   end
 end
 logger = Logger.new(STDOUT)
-CACHE = Cache.new(Redis::PooledClient.new, logger: logger)
+CACHE = Cache.new(Redis::PooledClient.new(url: ENV["CACHE_REDIS_URL"]?), logger: logger)
 
 module Moku
   class App
@@ -550,6 +550,7 @@ server = HTTP::Server.new([
   HTTP::MethodTranslation.new,
   HTTP::Session::RedisStore.new(
     key: "moku_session",
+    redis: Redis::PooledClient.new(url: ENV["REDIS_URL"]?),
   ),
   Moku::App.new,
 ])
