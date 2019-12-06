@@ -1061,6 +1061,13 @@ module DB
         MATCH (follower:LocalAccount)-[:FOLLOWS]->(account)-[:HAS_FOLLOWERS_STREAM]->(stream)
         MERGE (follower)-[:SUBSCRIBED_TO]->(stream)
       CYPHER
+
+
+      connection.execute <<-CYPHER
+        MATCH (note:Note)
+        WHERE NOT note:Replyable
+        SET note:Replyable
+      CYPHER
     end
   end
 end
