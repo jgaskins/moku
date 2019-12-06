@@ -56,6 +56,17 @@
 
   <% if current_user %>
     <ul class="note-actions">
+      <li class="note-action reply">
+        <details>
+          <summary>↩️</summary>
+
+          <form action="/new_note" method="POST">
+            <input type="hidden" name="in_reply_to" value="<%= note.id %>" />
+            <textarea name="content" autofocus></textarea>
+            <button>Post</button>
+          </form>
+        </details>
+      </li>
       <li class="note-action">
         <form action="<%= note_url %>/like" method="POST">
           <button class="<%= "i-liked" if i_liked %>">👍</button>

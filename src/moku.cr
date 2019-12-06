@@ -113,6 +113,9 @@ module Moku
                 to = [PublicStreamURL.to_s]
                 cc = [current_user.followers_url.to_s]
                 sensitive = false
+                if in_reply_to = params["in_reply_to"]?
+                  in_reply_to_id = URI.parse(in_reply_to)
+                end
 
                 note = DB::PostNoteFromAccount[
                   account_id: current_user.id,
@@ -120,7 +123,7 @@ module Moku
                   content: params["content"],
                   created_at: created_at,
                   url: url,
-                  in_reply_to: nil,
+                  in_reply_to: in_reply_to_id,
                   to: to,
                   cc: cc,
                   sensitive: sensitive,
