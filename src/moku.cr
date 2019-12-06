@@ -402,7 +402,7 @@ module Moku
           if query = r.params["query"]?
             results = search_for(query)
           else
-            results = Array(ResultRow).new
+            results = Tuple.new
           end
 
           render "search"
