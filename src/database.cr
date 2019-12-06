@@ -291,8 +291,8 @@ module DB
   struct GetAccountWithPublicKeyAndAttachments < Query
     def call(handle : String) : {Account, String, Array(Attachment)}
       if row = exec_cast(<<-CYPHER, {Account, String, Array(Attachment)}, handle: handle).first?
-        MATCH (acct:Account { handle: $handle })
-        OPTIONAL MATCH (acct)-[:HAS_KEY_PAIR]->(key_pair)
+        MATCH (acct:LocalAccount { handle: $handle })
+        MATCH (acct)-[:HAS_KEY_PAIR]->(key_pair)
         OPTIONAL MATCH (acct)-[:HAS_ATTACHMENT]->(attachment)
 
         RETURN acct, key_pair.public_key, collect(attachment) AS attachments
