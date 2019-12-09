@@ -16,6 +16,10 @@ dependencies:
     github: stefanwille/crystal-redis
   amqp-client:
     github: cloudamqp/amqp-client.cr
+  awscr-signer:
+    github: taylorfinnell/awscr-signer
+  awscr-s3:
+    github: taylorfinnell/awscr-s3
   dotenv:
     github: drum445/dotenv
 

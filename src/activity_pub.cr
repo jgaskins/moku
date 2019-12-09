@@ -59,6 +59,7 @@ module ActivityPub
       @attributed_to : Value? = nil,
       @published : Time? = nil,
       @url : URI? = nil,
+      @media_type : String? = nil,
       @to : Array(String)? = nil,
       @cc : Array(String)? = nil,
       @sensitive : Bool? = false,

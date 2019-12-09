@@ -5,6 +5,8 @@ end
 
 require "http"
 require "logger"
+require "awscr-signer"
+require "awscr-s3"
 
 require "./route"
 require "./database"
@@ -17,6 +19,8 @@ require "./moku/config"
 require "./moku/api"
 require "./services/send_activity"
 require "./services/webfinger"
+
+require "./file_upload"
 
 require "redis"
 class Cache
@@ -107,7 +111,45 @@ module Moku
           r.on "new_note" do
             r.post do
               if body = r.body
-                params = HTTP::Params.parse(body.gets_to_end)
+                files = Array(FileUpload).new
+
+                if r.headers["Content-Type"]? =~ %r{multipart/form-data}
+                  params = HTTP::Params.new
+                  file_content_type = nil
+
+                  HTTP::FormData.parse(r) do |part|
+                    case name = part.name
+                    when "upload"
+                      file_content_type = part.headers["Content-Type"]
+                      file = File.tempfile(part.filename) do |file|
+                        IO.copy part.body, file
+                      end
+                      extension = File.extname(part.filename || "file.#{file_content_type.gsub(%r{\A.*/}, "")}")
+                      id = UUID.random
+                      key = "media_attachments/#{current_user.handle}/#{id}/original#{extension}"
+                      files << FileUpload.new(
+                        file: file,
+                        key: key,
+                        content_type: file_content_type,
+                      )
+                      spawn do
+                        client = Awscr::S3::Client.new(AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, endpoint: S3_ENDPOINT)
+                        uploader = Awscr::S3::FileUploader.new(client)
+
+                        File.open(file.path, "r") do |file|
+                          if uploader.upload(S3_BUCKET, key, file, { "x-amz-acl" => "public-read" })
+                          else
+                            raise uploader.inspect
+                          end
+                        end
+                      end
+                    else
+                      params[name] = part.body.gets_to_end
+                    end
+                  end
+                else
+                  params = HTTP::Params.parse(body.gets_to_end)
+                end
                 url = URI.parse("#{current_user_id.as_s}/notes/#{UUID.random}")
                 created_at = Time.utc
                 to = [PublicStreamURL.to_s]
@@ -127,6 +169,13 @@ module Moku
                   to: to,
                   cc: cc,
                   sensitive: sensitive,
+                  attachments: files.map { |file|
+                    ActivityPub::Object.new(
+                      type: "Document",
+                      url: URI.parse("#{S3_CDN_URL}/#{file.key}"),
+                      media_type: file.content_type,
+                    )
+                  },
                 ]
 
                 followers = DB::GetFollowersForAccount[current_user.handle]
@@ -155,7 +204,7 @@ module Moku
                   spawn do
                     case f = follower
                     when Account
-                      puts "Federating note to #{f.id}"
+                      puts "Federating note to #{f.shared_inbox}"
                       Services::SendActivity[activity, f.shared_inbox, keypair]
                     when PartialAccount
                       account = Services::FetchRemoteAccount.new.call follower.id
@@ -582,6 +631,14 @@ module HTTP
 
 
       call_next context
+    end
+  end
+
+  module FormData
+    def self.parse(request : ::Route::Request, &)
+      parse request.@request do |part|
+        yield part
+      end
     end
   end
 end

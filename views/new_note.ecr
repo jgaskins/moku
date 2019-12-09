@@ -1,4 +1,5 @@
-<form action="/new_note" method="POST">
+<form action="/new_note" method="POST" enctype="multipart/form-data">
   <div><textarea name="content"></textarea></div>
+  <div><input type="file" name="upload" accept="image/*, video/*" multiple /></div>
   <button>Post!</button>
 </form>
