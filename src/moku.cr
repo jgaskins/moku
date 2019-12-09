@@ -162,7 +162,7 @@ module Moku
                 note = DB::PostNoteFromAccount[
                   account_id: current_user.id,
                   id: url,
-                  content: params["content"],
+                  content: params["content"].gsub(/</, "&lt;"),
                   created_at: created_at,
                   url: url,
                   in_reply_to: in_reply_to_id,
