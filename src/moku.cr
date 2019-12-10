@@ -136,8 +136,8 @@ module Moku
                         uploader = Awscr::S3::FileUploader.new(client)
 
                         File.open(file.path, "r") do |file|
-                          if uploader.upload(S3_BUCKET, key, file, { "x-amz-acl" => "public-read" })
-                          else
+                          unless uploader.upload(S3_BUCKET, key, file, { "x-amz-acl" => "public-read" })
+                            # TODO: Figure out a better exception here
                             raise uploader.inspect
                           end
                         end
