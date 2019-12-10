@@ -115,7 +115,6 @@ module Moku
 
                 if r.headers["Content-Type"]? =~ %r{multipart/form-data}
                   params = HTTP::Params.new
-                  file_content_type = nil
 
                   HTTP::FormData.parse(r) do |part|
                     case name = part.name
