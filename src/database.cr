@@ -1,5 +1,4 @@
 require "neo4j"
-require "pool/connection"
 require "logger"
 
 require "./models"
@@ -7,9 +6,7 @@ require "./moku/config"
 require "./db/pool"
 
 module DB
-  NEO4J_POOL = Pool(Neo4j::Bolt::Connection).new(max_idle_pool_size: 50) do
-    Neo4j::Bolt::Connection.new(ENV["NEO4J_URL"], ssl: !!ENV["NEO4J_SSL"]?)
-  end
+  DRIVER = Neo4j.connect(URI.parse(ENV["NEO4J_URL"]), ssl: !!ENV["NEO4J_SSL"]?)
 
   spawn ensure_indexes!
   spawn run_migrations!
@@ -34,51 +31,34 @@ module DB
       new.call(*args, **kwargs)
     end
 
-    def initialize(@pool : Pool(Neo4j::Bolt::Connection) = NEO4J_POOL)
+    def initialize(@driver : Neo4j::Cluster | Neo4j::DirectDriver = DRIVER)
     end
 
-    def transaction(&block : Neo4j::Bolt::Transaction -> T) forall T
-      connection do |connection|
-        connection.transaction { |txn| block.call txn }
-      end
+    private def write_transaction(&block : Neo4j::Bolt::Transaction -> T) forall T
+      @driver.write_transaction { |txn| yield txn }
     end
 
-    def connection
-      @pool.connection do |c|
-        yield c
-      rescue ex
-        c.reset
-        raise ex
-      end
+    private def read_transaction(&block : Neo4j::Bolt::Transaction -> T) forall T
+      @driver.read_transaction { |txn| yield txn }
     end
 
     # exec_cast(query, {User, Group}, user_id: params["id"])
-    def exec_cast(_query : String, _types : Tuple(*TYPES), **params) forall TYPES
+    private def exec_cast(_query : String, _types : Tuple(*TYPES), **params) forall TYPES
       exec_cast _query, _types, Neo4j::Map.from(params)
     end
 
-    def exec_cast(_query : String, _types : Tuple(*TYPES), **params, &) forall TYPES
+    private def exec_cast(_query : String, _types : Tuple(*TYPES), **params, &) forall TYPES
       exec_cast _query, _types, Neo4j::Map.from(params) do |row|
         yield row
       end
     end
 
-    # def exec_cast(query : String, types : Tuple(*TYPES)) forall TYPES
-    #   exec_cast query, types, Neo4j::Map.new
-    # end
-
-    # def exec_cast(query : String, types : Tuple(*TYPES), &) forall TYPES
-    #   exec_cast query, types, Neo4j::Map.new do |row|
-    #     yield row
-    #   end
-    # end
-
-    def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map, &) forall TYPES
+    private def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map, &) forall TYPES
       start = Time.utc
       count = 0
-      connection do |connection|
+      session do |session|
         error = nil
-        connection.exec_cast query, params, types do |row|
+        session.exec_cast query, params, types do |row|
           count += 1
           yield row unless error
 
@@ -105,27 +85,27 @@ module DB
       end
     end
 
-    def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map) forall TYPES
+    private def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map) forall TYPES
       start = Time.utc
-      results = connection do |connection|
-        connection.exec_cast query, params, types
+      results = session do |session|
+        session.exec_cast query, params, types
       end
     ensure
-        LOGGER.debug do
-          {
-            query: self.class.name,
-            cypher: query,
-            types: types,
-            params: params,
-            result_count: results.try(&.size),
-            execution_time: Time.utc - start.not_nil!,
-          }
-        end
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          types: types,
+          params: params,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }
+      end
     end
 
-    def execute(_query : String, **params)
+    private def execute(_query : String, **params)
       start = Time.utc
-      results = connection(&.execute(_query, **params))
+      results = session(&.execute(_query, **params))
     ensure
       LOGGER.debug do
         {
@@ -136,6 +116,10 @@ module DB
           execution_time: Time.utc - start.not_nil!,
         }
       end
+    end
+
+    private def session(& : Neo4j::Session -> T) forall T
+      @driver.session { |session| yield session }
     end
 
     class Exception < ::DB::Exception
@@ -329,6 +313,15 @@ module DB
       end
 
       accounts
+    end
+  end
+
+  struct GetPostCountForAccount < Query
+    def call(handle : String) : Int64
+      exec_cast(<<-CYPHER, {Int64}, handle: handle).first.first
+        MATCH (:LocalAccount { handle: $handle })-[:POSTED]->(post)
+        RETURN count(post)
+      CYPHER
     end
   end
 
@@ -990,17 +983,30 @@ module DB
 
   def self.ensure_indexes!
     puts "Ensuring indexes..."
-    NEO4J_POOL.connection do |connection|
+    DRIVER.session(&.write_transaction { |txn|
       # Unique indexes
       {
-        LocalAccount: %w[handle email],
+        LocalAccount: %w[id handle email],
+        Account: %w[id],
+        RemoteAccount: %w[id],
+        Person: %w[id],
+        PartialAccount: %w[id],
         Note: %w[id],
         Stream: %w[id],
-        Person: %w[id],
       }.each do |label, properties|
         properties.each do |property|
-          connection.execute <<-CYPHER.tap { |query| puts query }
+          txn.execute <<-CYPHER.tap { |query| puts query }
             CREATE CONSTRAINT ON (n:#{label}) ASSERT n.#{property} IS UNIQUE
+          CYPHER
+        end
+      end
+
+      {
+        Note: %w[created_at],
+      }.each do |label, properties|
+        properties.each do |property|
+          txn.execute <<-CYPHER.tap { |query| puts query }
+            CREATE INDEX ON :#{label}(#{property})
           CYPHER
         end
       end
@@ -1014,14 +1020,14 @@ module DB
         Person: %w[id],
       }.each do |label, properties|
         properties.each do |property|
-          connection.execute <<-CYPHER.tap { |query| puts query }
+          txn.execute <<-CYPHER.tap { |query| puts query }
             CREATE CONSTRAINT ON (n:#{label}) ASSERT exists(n.#{property})
           CYPHER
         end
       end
 
       begin
-        # connection.execute <<-CYPHER.tap { |query| puts query }
+        # txn.execute <<-CYPHER.tap { |query| puts query }
         #   CALL db.index.fulltext.createNodeIndex(
         #     'search_everything',
         #     ['Note', 'Account'],
@@ -1032,13 +1038,13 @@ module DB
       rescue ex : Neo4j::IndexAlreadyExists
         # We're good
       end
-    end
+    })
   end
 
   def self.run_migrations!
     puts "Running data migrations..."
-    NEO4J_POOL.connection do |connection|
-      connection.execute <<-CYPHER
+    DRIVER.session(&.write_transaction { |txn|
+      txn.execute <<-CYPHER
         MATCH (acct:LocalAccount)
 
         MERGE (stream:Stream { id: acct.id })
@@ -1057,18 +1063,18 @@ module DB
         MERGE (note)-[:POSTED_IN]->(outbox)
       CYPHER
 
-      connection.execute <<-CYPHER
+      txn.execute <<-CYPHER
         MATCH (follower:LocalAccount)-[:FOLLOWS]->(account)-[:HAS_FOLLOWERS_STREAM]->(stream)
         MERGE (follower)-[:SUBSCRIBED_TO]->(stream)
       CYPHER
 
 
-      connection.execute <<-CYPHER
+      txn.execute <<-CYPHER
         MATCH (note:Note)
         WHERE NOT note:Replyable
         SET note:Replyable
       CYPHER
-    end
+    })
   end
 end
 

@@ -23,8 +23,8 @@ admin = pp LocalAccount.new(
 
 key = OpenSSL::RSA::KeyPair.generate
 
-DB::NEO4J_POOL.connection do |connection|
-  connection.execute <<-CYPHER,
+DB::DRIVER.session do |session|
+  session.execute <<-CYPHER,
     MERGE (admin:Admin:Moderator:LocalAccount:Account:Person {
       handle: $admin_handle
     })
