@@ -1,0 +1,36 @@
+<h1><a href="<%= account.id %>"><%= account.display_name %></a></h1>
+<h2><a href="<%= account.id %>"><%= account.handle %></a></h1>
+
+<dl>
+  <dt>Posts</dt>
+  <dd><%= post_count %></dd>
+  <dt>Followers</dt>
+  <dd>
+    <details>
+      <summary><%= follower_count %></summary>
+
+      <ul>
+        <% followers.select(&.is_a?(Account)).each do |follower| %>
+          <% follower = follower.as(Account) %>
+          <li>
+            <a href="<%= follower.id %>"><%= follower.display_name %> (@<%= follower.handle %>@<%= follower.id.host %>)</a>
+          </li>
+        <% end %>
+      </ul>
+    </details>
+  </dd>
+  <dt>Following</dt>
+  <dd>
+    <details>
+      <summary><%= following_count %></summary>
+
+      <ul>
+        <% following.each do |followee| %>
+          <li>
+            <a href="<%= followee.id %>"><%= followee.display_name %> (@<%= followee.handle %>@<%= followee.id.host %>)</a>
+          </li>
+        <% end %>
+      </ul>
+    </details>
+  </dd>
+</dl>

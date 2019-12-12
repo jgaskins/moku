@@ -47,7 +47,7 @@ module Route
         end
 
         def {{method.id.downcase}}(capture : Symbol)
-          is(capture) { |capture| yield {{method.id.downcase}} { capture } }
+          is(capture) { |capture| {{method.id.downcase}} { yield capture } }
         end
 
         def {{method.id.downcase}}(path : String)
@@ -78,7 +78,10 @@ module Route
         yield match[0]
         handled!
       end
-      @request.path = old_path
+    ensure
+      if old_path
+        @request.path = old_path
+      end
     end
 
     def on(*paths : String)

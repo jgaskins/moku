@@ -519,11 +519,18 @@ module Moku
           
         end
 
-        r.on :handle do |handle|
-          response << <<-HTML
-            <h1>#{handle}</h1>
-            <p>#{session["user_id"]?.inspect}</p>
-          HTML
+        r.get :handle do |handle|
+          if account = DB::GetLocalAccountWithHandle[handle]
+            post_count = DB::GetPostCountForAccount[handle]
+            follower_count = DB::GetFollowerCountForAccount[handle]
+            following_count = DB::GetFollowingCountForAccount[handle]
+            followers = DB::GetFollowersForAccount[handle]
+            following = DB::GetFollowingForAccount[handle]
+
+            render "accounts/show"
+          else
+            render "not_found"
+          end
         end
       end
     end
