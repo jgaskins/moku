@@ -585,17 +585,20 @@ module DB
         WITH acct
 
         OPTIONAL MATCH (acct)-[:HAS_OUTBOX_STREAM]->(outbox)
-        MERGE (note:Note:Replyable { id: $id })
+        MERGE (note:Replyable { id: $id })
           ON CREATE SET
             note.created_at = $created_at
-          SET
-            note.content = $content,
-            note.summary = $summary,
-            note.to = $to,
-            note.cc = $cc,
-            note.sensitive = $sensitive,
-            note.url = $url,
-            note.type = $type
+        REMOVE
+          note:PartialReplyable
+        SET
+          note:Note,
+          note.content = $content,
+          note.summary = $summary,
+          note.to = $to,
+          note.cc = $cc,
+          note.sensitive = $sensitive,
+          note.url = $url,
+          note.type = $type
 
         // Add this note as a reply to the specified one
         FOREACH (ignored IN CASE $in_reply_to WHEN NULL THEN [] ELSE [1] END |
@@ -1009,6 +1012,8 @@ module DB
         Person: %w[id],
         PartialAccount: %w[id],
         Note: %w[id],
+        Replyable: %w[id],
+        PartialReplyable: %w[id],
         Stream: %w[id],
       }.each do |label, properties|
         properties.each do |property|
@@ -1085,6 +1090,18 @@ module DB
         MERGE (follower)-[:SUBSCRIBED_TO]->(stream)
       CYPHER
 
+      txn.exec_cast <<-CYPHER, {String} do |(id)|
+        MATCH (partial:PartialReplyable)
+        WITH partial
+
+        OPTIONAL MATCH (note:Note { id: partial.id })
+        DETACH DELETE note
+
+        RETURN partial.id
+      CYPHER
+        puts "Reifying #{id}"
+        spawn Moku::Services::FetchReplyable.new.call(URI.parse(id))
+      end
 
       txn.execute <<-CYPHER
         MATCH (note:Note)

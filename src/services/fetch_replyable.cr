@@ -28,6 +28,8 @@ module Moku
             cc: object.cc || %w[],
             poll_options: object.one_of,
           ]
+        else
+          raise "Cannot reify: #{json}"
         end
       end
 
