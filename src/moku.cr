@@ -156,6 +156,10 @@ module Moku
                 sensitive = false
                 if in_reply_to = params["in_reply_to"]?
                   in_reply_to_id = URI.parse(in_reply_to)
+
+                  previous = DB::GetNoteWithID[in_reply_to_id].not_nil! # We should have the note we're replying to
+                  to = (to + previous.to).uniq
+                  cc = (cc + previous.cc).uniq
                 end
 
                 note = DB::PostNoteFromAccount[
