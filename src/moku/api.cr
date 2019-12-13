@@ -1,6 +1,7 @@
 require "./api/users"
 
 require "../services/reify_partial_accounts"
+require "../services/reify_partial_replyables"
 
 struct Moku::API
   include Route
@@ -200,6 +201,7 @@ struct Moku::API
       end
 
       spawn Services::ReifyPartialAccounts.call
+      spawn Services::ReifyPartialReplyables.call
     end
 
     def handle(activity : ActivityPub::Activity)

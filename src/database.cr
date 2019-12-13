@@ -859,6 +859,23 @@ module DB
     end
   end
 
+  struct PartialReplyableIDs < Query
+    def call
+      uris = Array(URI).new
+
+      exec_cast <<-CYPHER, {String} do |(url)|
+        MATCH (partial:PartialReplyable)
+        RETURN partial.id
+      CYPHER
+        uris << URI.parse(url)
+      rescue ex
+        pp ex
+      end
+
+      uris
+    end
+  end
+
   struct UpdatePerson < Query
     def call(account : ::Account)
       # transaction do |txn|
