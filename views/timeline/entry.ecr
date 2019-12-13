@@ -2,7 +2,11 @@
 
 <div class="timeline-entry">
   <% if boosted_by %>
-    <div class="boosted-by">Boosted by <%= boosted_by.display_name %></div>
+    <div class="boosted-by">
+      <a href="<%= boosted_by.id %>">
+        Boosted by <%= boosted_by.display_name %>
+      </a>
+    </div>
   <% end %>
 
   <% if author.icon %>
