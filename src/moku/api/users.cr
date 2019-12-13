@@ -388,7 +388,7 @@ module Moku; struct API; struct Users
 
     def call(context)
       route context do |r, response|
-        r.on :id do |id|
+        r.get :id do |id|
           id = URI.parse("#{SELF}#{r.original_path}")
 
           if note = DB::GetNoteWithID[id]
