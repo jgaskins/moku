@@ -414,7 +414,7 @@ module Moku; struct API; struct Users
             ).to_json response
           else
             response.status = HTTP::Status::NOT_FOUND
-            { error: "Status #{r.original_path.to_s.inspect} not found" }.to_json response
+            { error: "Status `#{id}` not found" }.to_json response
           end
         end
       end
