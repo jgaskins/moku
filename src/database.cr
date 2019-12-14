@@ -1090,7 +1090,7 @@ module DB
         MERGE (follower)-[:SUBSCRIBED_TO]->(stream)
       CYPHER
 
-      txn.exec_cast <<-CYPHER, {String} do |(id)|
+      txn.execute <<-CYPHER
         MATCH (partial:PartialReplyable)
         WITH partial
 
@@ -1099,9 +1099,6 @@ module DB
 
         RETURN partial.id
       CYPHER
-        puts "Reifying #{id}"
-        spawn Moku::Services::FetchReplyable.new.call(URI.parse(id))
-      end
 
       txn.execute <<-CYPHER
         MATCH (note:Note)
