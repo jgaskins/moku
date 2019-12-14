@@ -22,7 +22,7 @@ shards:
 
   neo4j:
     github: jgaskins/neo4j.cr
-    commit: 6e5ee03b6ab7c9a7ed196762ba27cff2130405d9
+    commit: 4ce7637f237a38fe8ecf019f794b74b05a318415
 
   pool:
     github: ysbaddaden/pool

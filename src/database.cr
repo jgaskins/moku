@@ -53,6 +53,30 @@ module DB
       end
     end
 
+    private def read_query(query, as types : Tuple(*T)) forall T
+      session(&.read_transaction(&.exec_cast(query, types)))
+    end
+
+    private def read_query(query, as types : Tuple(*T), parameters : Neo4j::Map) forall T
+      session(&.read_transaction(&.exec_cast(query, parameters, types)))
+    end
+
+    private def read_query(query : String) : Nil
+      session(&.read_transaction(&.execute(query)))
+    end
+
+    private def read_query(_query query, as types : Tuple(*T), **params, &) forall T
+      session(&.read_transaction(&.exec_cast(query, params, types) { |row| yield row }))
+    end
+
+    private def read_query(_query query, as types : Tuple(*T), **params) forall T
+      session(&.read_transaction(&.exec_cast(query, params, types)))
+    end
+
+    private def write_query(query : String, as types : Tuple(*T), **parameters) forall T
+      session(&.write_transaction(&.exec_cast(query, parameters, types)))
+    end
+
     private def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map, &) forall TYPES
       start = Time.utc
       count = 0
@@ -131,7 +155,7 @@ module DB
   struct GetLocalAccountWithID < Query
     def call(id : String) : LocalAccount?
       user = nil
-      exec_cast <<-CYPHER, {LocalAccount}, id: id do |(account)|
+      read_query <<-CYPHER, {LocalAccount}, id: id do |(account)|
         MATCH (acct:LocalAccount { id: $id })
         RETURN acct
         LIMIT 1
@@ -146,7 +170,7 @@ module DB
   struct GetLocalAccountWithEmail < Query
     def call(email : String) : LocalAccount?
       user = nil
-      exec_cast <<-CYPHER, {LocalAccount}, email: email do |(account)|
+      read_query <<-CYPHER, {LocalAccount}, email: email do |(account)|
         MATCH (acct:LocalAccount { email: $email })
         RETURN acct
         LIMIT 1
@@ -161,7 +185,7 @@ module DB
   struct GetLocalAccountWithHandle < Query
     def call(handle : String) : LocalAccount?
       user = nil
-      exec_cast <<-CYPHER, {LocalAccount}, handle: handle do |(account)|
+      read_query <<-CYPHER, {LocalAccount}, handle: handle do |(account)|
         MATCH (acct:LocalAccount { handle: $handle })
         RETURN acct
         LIMIT 1
@@ -175,7 +199,7 @@ module DB
 
   struct GetTimelineFor < Query
     def call(user_id : String, older_than : Time? = nil, newer_than : Time? = nil, max limit = 25, &)
-      exec_cast(
+      read_query(
         <<-CYPHER,
           WITH datetime({ year: 1990 }) AS oldest_time_we_care_about
 
@@ -215,7 +239,7 @@ module DB
 
   struct GetNoteWithID < Query
     def call(id : URI) : Note?
-      exec_cast(<<-CYPHER, {Note}, Neo4j::Map { "id" => id.to_s }).first?.try(&.first)
+      read_query(<<-CYPHER, {Note}, Neo4j::Map { "id" => id.to_s }).first?.try(&.first)
         MATCH (note:Note { id: $id })
         RETURN note
         LIMIT 1
@@ -225,7 +249,7 @@ module DB
 
   struct GetNotesInStream < Query
     def call(id : String, current_user_id : URI? = nil, limit = 1_000_000)
-      exec_cast <<-CYPHER, {Note, Account, Array(Attachment), Array(PollOption), Bool, Bool}, id: id, current_user_id: current_user_id ? current_user_id.to_s : nil, limit: limit do |row|
+      read_query <<-CYPHER, {Note, Account, Array(Attachment), Array(PollOption), Bool, Bool}, id: id, current_user_id: current_user_id ? current_user_id.to_s : nil, limit: limit do |row|
         MATCH (stream:Stream { id: $id })
         MATCH (note)-[:POSTED_IN]->(stream)
         MATCH (author:Account)-[:POSTED]->(note)
@@ -249,7 +273,7 @@ module DB
 
   struct GetThreadFor < Query
     def call(id : URI, current_user : LocalAccount?)
-      exec_cast <<-CYPHER, {Note, Account, Array(Attachment), Bool, Bool}, id: id.to_s, current_user_id: current_user.try(&.id.to_s) do |row|
+      read_query <<-CYPHER, {Note, Account, Array(Attachment), Bool, Bool}, id: id.to_s, current_user_id: current_user.try(&.id.to_s) do |row|
         MATCH (selected:Note { id: $id })
         MATCH (note:Note)
         WHERE (note)-[:IN_REPLY_TO*0..]->(selected)
@@ -274,7 +298,7 @@ module DB
 
   struct GetAccountWithPublicKeyAndAttachments < Query
     def call(handle : String) : {Account, String, Array(Attachment)}
-      if row = exec_cast(<<-CYPHER, {Account, String, Array(Attachment)}, handle: handle).first?
+      if row = read_query(<<-CYPHER, {Account, String, Array(Attachment)}, handle: handle).first?
         MATCH (acct:LocalAccount { handle: $handle })
         MATCH (acct)-[:HAS_KEY_PAIR]->(key_pair)
         OPTIONAL MATCH (acct)-[:HAS_ATTACHMENT]->(attachment)
@@ -290,7 +314,7 @@ module DB
 
   struct GetAccount < Query
     def call(id : URI) : Account?
-      if row = exec_cast(<<-CYPHER, {Account}, id: id.to_s).first?
+      if row = read_query(<<-CYPHER, {Account}, id: id.to_s).first?
         MATCH (acct:Account { id: $id })
         RETURN acct
         LIMIT 1
@@ -304,7 +328,7 @@ module DB
     def call(handle : String) : Array(Account | PartialAccount)
       accounts = Array(Account | PartialAccount).new
 
-      exec_cast <<-CYPHER, {Account | PartialAccount}, handle: handle do |(account)|
+      read_query <<-CYPHER, {Account | PartialAccount}, handle: handle do |(account)|
         MATCH (follower:Person)-[:FOLLOWS]->(account:Account)
         WHERE account.handle = $handle
         RETURN follower
@@ -318,7 +342,7 @@ module DB
 
   struct GetPostCountForAccount < Query
     def call(handle : String) : Int64
-      exec_cast(<<-CYPHER, {Int64}, handle: handle).first.first
+      read_query(<<-CYPHER, {Int64}, handle: handle).first.first
         MATCH (:LocalAccount { handle: $handle })-[:POSTED]->(post)
         RETURN count(post)
       CYPHER
@@ -327,7 +351,7 @@ module DB
 
   struct GetFollowerCountForAccount < Query
     def call(handle : String) : Int64
-      exec_cast(<<-CYPHER, {Int64}, handle: handle).first.first
+      read_query(<<-CYPHER, {Int64}, handle: handle).first.first
         MATCH (follower:Account)-[:FOLLOWS]->(account:Account)
         WHERE account.handle = $handle
         RETURN count(follower)
@@ -339,7 +363,7 @@ module DB
     def call(handle : String) : Array(Account)
       accounts = Array(Account).new
 
-      exec_cast <<-CYPHER, {Account}, handle: handle do |(account)|
+      read_query <<-CYPHER, {Account}, handle: handle do |(account)|
         MATCH (follower:Account)-[:FOLLOWS]->(account:Account)
         WHERE follower.handle = $handle
         RETURN account
@@ -353,7 +377,7 @@ module DB
 
   struct GetFollowingCountForAccount < Query
     def call(handle : String) : Int64
-      exec_cast(<<-CYPHER, {Int64}, handle: handle).first.first
+      read_query(<<-CYPHER, {Int64}, handle: handle).first.first
         MATCH (follower:Account)-[:FOLLOWS]->(account:Account)
         WHERE follower.handle = $handle
         RETURN count(account)
@@ -379,7 +403,7 @@ module DB
     def call(handle : String, older_than timestamp : Time) : Array(Note)
       notes = Array(Note).new
 
-      exec_cast <<-CYPHER, {Note}, handle: handle, timestamp: timestamp do |(note)|
+      read_query <<-CYPHER, {Note}, handle: handle, timestamp: timestamp do |(note)|
         MATCH (account:Account { handle: $handle })
         MATCH (account)-[:HAS_OUTBOX_STREAM]->(stream)
         MATCH (note)-[:POSTED_IN]->(stream)
@@ -397,7 +421,7 @@ module DB
 
   struct OutboxCollectionCountForAccount < Query
     def call(handle : String) : Int64
-      exec_cast(<<-CYPHER, {Int64}, handle: handle).first.first
+      read_query(<<-CYPHER, {Int64}, handle: handle).first.first
         MATCH (account:Account { handle: $handle })
         MATCH (account)-[:HAS_OUTBOX_STREAM]->(stream)
         MATCH (note)-[:POSTED_IN]->(stream)
@@ -479,7 +503,7 @@ module DB
 
   struct AlreadyFollows < Query
     def call(follower_id : URI, followee_id : URI) : Bool
-      exec_cast(<<-CYPHER, {Bool}, follower_id: follower_id.to_s, followee_id: followee_id.to_s).first.first
+      read_query(<<-CYPHER, {Bool}, follower_id: follower_id.to_s, followee_id: followee_id.to_s).first.first
         OPTIONAL MATCH (follower:Account { id: $follower_id })
         OPTIONAL MATCH (followee:Account { id: $followee_id })
 
@@ -519,7 +543,7 @@ module DB
       shared_inbox : URI = id.dup.tap { |uri| uri.path = "/inbox" },
       _labels = %w[Account LocalAccount Person],
     ) : LocalAccount
-      result = exec_cast <<-CYPHER, {LocalAccount},
+      result = write_query <<-CYPHER, {LocalAccount},
         CREATE (acct:#{_labels.join(':')} {
           id: $id,
           handle: $handle,
@@ -747,7 +771,7 @@ module DB
 
   struct IsAlreadyLikedBy < Query
     def call(note_id : URI, actor : LocalAccount)
-      exec_cast(<<-CYPHER, {Bool}, note_id: note_id.to_s, actor_id: actor.id.to_s).first.first
+      read_query(<<-CYPHER, {Bool}, note_id: note_id.to_s, actor_id: actor.id.to_s).first.first
         OPTIONAL MATCH (:LocalAccount { id: $actor_id })-[like:LIKED]->(:Note { id: $note_id })
         RETURN like IS NOT NULL AS liked
         LIMIT 1
@@ -761,7 +785,7 @@ module DB
 
   struct IsAlreadyBoostedBy < Query
     def call(note_id : URI, actor : LocalAccount) : URI?
-      exec_cast(<<-CYPHER, {String?}, note_id: note_id.to_s, actor_id: actor.id.to_s).first.first.try { |id| URI.parse id }
+      read_query(<<-CYPHER, {String?}, note_id: note_id.to_s, actor_id: actor.id.to_s).first.first.try { |id| URI.parse id }
         OPTIONAL MATCH (:LocalAccount { id: $actor_id })-[boost:BOOSTED]->(:Note { id: $note_id })
         RETURN boost.id
         LIMIT 1
@@ -775,7 +799,7 @@ module DB
 
   struct AuthorOf < Query
     def call(note_id : URI)
-      exec_cast(<<-CYPHER, {Account}, note_id: note_id.to_s).first.first
+      read_query(<<-CYPHER, {Account}, note_id: note_id.to_s).first.first
         MATCH (author:Account)-[:POSTED]->(:Note { id: $note_id })
         RETURN author
       CYPHER
@@ -836,7 +860,7 @@ module DB
 
   struct NotesForAccount < Query
     def call(account_id : URI)
-      exec_cast(<<-CYPHER, {Account, Array(Note)}, id: account_id.to_s).first
+      read_query(<<-CYPHER, {Account, Array(Note)}, id: account_id.to_s).first
         MATCH (acct:Account { id: $id })
         OPTIONAL MATCH (acct)-[:POSTED]->(note)
 
@@ -849,7 +873,7 @@ module DB
     def call
       uris = Array(URI).new
 
-      exec_cast <<-CYPHER, {String} do |(url)|
+      read_query <<-CYPHER, {String} do |(url)|
         MATCH (partial:PartialAccount)
         RETURN partial.id
       CYPHER
@@ -866,7 +890,7 @@ module DB
     def call
       uris = Array(URI).new
 
-      exec_cast <<-CYPHER, {String} do |(url)|
+      read_query <<-CYPHER, {String} do |(url)|
         MATCH (partial:PartialReplyable)
         RETURN partial.id
       CYPHER
@@ -926,7 +950,7 @@ module DB
 
   struct GetNodeInfo < Query
     def call : NodeInfo
-      result = exec_cast(<<-CYPHER, {Int32, Int32, Int32, Int32, Bool, Bool}).first
+      result = read_query(<<-CYPHER, {Int32, Int32, Int32, Int32, Bool, Bool}).first
         MATCH (all_accts:LocalAccount)
         WITH all_accts
 
@@ -974,7 +998,7 @@ module DB
     def call(limit = 10) : Array(LocalAccount)
       admins = Array(LocalAccount).new
 
-      exec_cast <<-CYPHER, {LocalAccount}, limit: limit do |(admin)|
+      read_query <<-CYPHER, {LocalAccount}, limit: limit do |(admin)|
         MATCH (admin:Admin)
         RETURN admin
         LIMIT $limit
@@ -990,7 +1014,7 @@ module DB
     alias Result = Note | Account
 
     def call(query : String, searcher : LocalAccount?) : Array({Result, Account?, Bool})
-      exec_cast <<-CYPHER, {Result, Account?, Bool}, query: query, my_id: searcher.try(&.id.to_s)
+      read_query <<-CYPHER, {Result, Account?, Bool}, query: query, my_id: searcher.try(&.id.to_s)
         CALL db.index.fulltext.queryNodes('search_everything', $query) YIELD node, score
         MATCH (node)
         OPTIONAL MATCH (account)-[:POSTED]->(node)
