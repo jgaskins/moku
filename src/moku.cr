@@ -55,7 +55,7 @@ module Moku
 
     def call(context)
       route context do |r, response, session|
-        r.get "health" {}
+        r.get "health" { return }
         r.on "nodeinfo" { return API::NodeInfo.new.call context }
         r.on ".well-known" { return WellKnown.new.call context }
         r.on "api" { return API.new.call(context) }
