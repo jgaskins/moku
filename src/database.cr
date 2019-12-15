@@ -955,23 +955,23 @@ module DB
     def call : NodeInfo
       result = read_query(<<-CYPHER, {Int32, Int32, Int32, Int32, Bool, Bool}).first
         MATCH (all_accts:LocalAccount)
-        WITH all_accts
+        WITH DISTINCT all_accts
 
         OPTIONAL MATCH (monthly_active:LocalAccount)-[:POSTED]->(note)
         WHERE note.created_at > datetime() - duration({ months: 1 })
-        WITH all_accts, count(distinct monthly_active) as posts_in_last_month
+        WITH DISTINCT all_accts, count(distinct monthly_active) as posts_in_last_month
 
         OPTIONAL MATCH (half_yearly_active:LocalAccount)-[:POSTED]->(note)
         WHERE note.created_at > datetime() - duration({ months: 6 })
-        WITH all_accts, posts_in_last_month, count(distinct half_yearly_active) as posts_in_last_half_year
+        WITH DISTINCT all_accts, posts_in_last_month, count(distinct half_yearly_active) as posts_in_last_half_year
 
         OPTIONAL MATCH (monthly_active:LocalAccount)-[:BOOSTED]->(note)
         WHERE note.created_at > datetime() - duration({ months: 1 })
-        WITH all_accts, posts_in_last_month, posts_in_last_half_year, count(distinct monthly_active) as boosts_in_last_month
+        WITH DISTINCT all_accts, posts_in_last_month, posts_in_last_half_year, count(distinct monthly_active) as boosts_in_last_month
 
         OPTIONAL MATCH (half_yearly_active:LocalAccount)-[:POSTED]->(note)
         WHERE note.created_at > datetime() - duration({ months: 6 })
-        WITH all_accts, posts_in_last_month, posts_in_last_half_year, boosts_in_last_month, count(distinct half_yearly_active) as boosts_in_last_half_year
+        WITH DISTINCT all_accts, posts_in_last_month, posts_in_last_half_year, boosts_in_last_month, count(distinct half_yearly_active) as boosts_in_last_half_year
 
         OPTIONAL MATCH (all_accts)-[:POSTED]->(local_post)
         OPTIONAL MATCH (all_accts)-[:BOOSTED]->(local_boost)
