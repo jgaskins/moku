@@ -540,6 +540,7 @@ module DB
       private_key : String,
       followers_url : URI = id.dup.tap { |uri| uri.path += "/followers" },
       outbox_url : URI = id.dup.tap { |uri| uri.path += "/outbox" },
+      inbox_url : URI = id.dup.tap { |uri| uri.path += "/inbox" },
       shared_inbox : URI = id.dup.tap { |uri| uri.path = "/inbox" },
       _labels = %w[Account LocalAccount Person],
     ) : LocalAccount
@@ -554,6 +555,7 @@ module DB
           manually_approves_followers: false,
           followers_url: $followers_url,
           shared_inbox: $shared_inbox,
+          inbox_url: $inbox_url,
           discoverable: true,
           created_at: datetime(),
           updated_at: datetime()
@@ -579,6 +581,7 @@ module DB
         followers_url: followers_url.to_s,
         shared_inbox: shared_inbox.to_s,
         outbox_url: outbox_url.to_s,
+        inbox_url: inbox_url.to_s,
         public_key: public_key,
         private_key: private_key
 
