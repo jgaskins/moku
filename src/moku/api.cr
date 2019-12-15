@@ -201,7 +201,7 @@ struct Moku::API
       end
 
       spawn Services::ReifyPartialAccounts.call
-      spawn Services::ReifyPartialReplyables.call
+      # spawn Services::ReifyPartialReplyables.call
     end
 
     def handle(activity : ActivityPub::Activity)
