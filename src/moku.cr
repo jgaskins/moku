@@ -119,6 +119,7 @@ module Moku
                   HTTP::FormData.parse(r) do |part|
                     case name = part.name
                     when "upload"
+                      next if part.filename.not_nil!.empty?
                       file_content_type = part.headers["Content-Type"]
                       file = File.tempfile(part.filename) do |file|
                         IO.copy part.body, file
