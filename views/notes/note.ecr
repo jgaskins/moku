@@ -1,4 +1,6 @@
 <% note_url = "/notes/#{URI.encode_www_form note.id.to_s}" %>
+<meta property="og:title" content="Post from <%= author.display_name %> (@<%= author.handle %>@<%= author.id.host %>)" />
+<meta property="og:description" content="<%= note.content %>" />
 
 <div>
   <% if author.icon %>
@@ -19,8 +21,10 @@
       <% case attachment.media_type
          when /\Aimage/ %>
         <a href="<%= attachment.url %>"><img src="<%= attachment.url %>"/></a>
+        <meta property="og:image" content="<%= attachment.url %>" />
       <% when /\Avideo/ %>
         <video src="<%= attachment.url %>" controls />
+        <meta property="og:video" content="<%= attachment.url %>" />
       <% end %>
     </li>
   <% end %>
