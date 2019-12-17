@@ -5,6 +5,8 @@ require "./models"
 require "./moku/config"
 require "./db/pool"
 
+require "./services/fetch_replyable"
+
 module DB
   DRIVER = Neo4j.connect(URI.parse(ENV["NEO4J_URL"]), ssl: !!ENV["NEO4J_SSL"]?)
 
@@ -613,14 +615,13 @@ module DB
 
         OPTIONAL MATCH (acct)-[:HAS_OUTBOX_STREAM]->(outbox)
         MERGE (note:Replyable { id: $id })
-          ON CREATE SET
-            note.created_at = $created_at
         REMOVE
           note:PartialReplyable
         SET
           note:Note,
           note.content = $content,
           note.summary = $summary,
+          note.created_at = coalesce(note.created_at, $created_at),
           note.to = $to,
           note.cc = $cc,
           note.sensitive = $sensitive,
@@ -1049,7 +1050,9 @@ module DB
           CYPHER
         end
       end
+    })
 
+    DRIVER.session(&.write_transaction { |txn|
       {
         Note: %w[created_at],
       }.each do |label, properties|
@@ -1059,7 +1062,9 @@ module DB
           CYPHER
         end
       end
+    })
 
+    DRIVER.session(&.write_transaction { |txn|
       # Existence constraints
       {
         Account: %w[display_name handle],
@@ -1116,6 +1121,14 @@ module DB
         MATCH (follower:LocalAccount)-[:FOLLOWS]->(account)-[:HAS_FOLLOWERS_STREAM]->(stream)
         MERGE (follower)-[:SUBSCRIBED_TO]->(stream)
       CYPHER
+
+      txn.exec_cast <<-CYPHER, {String} do |(id)|
+        MATCH (n:Note)
+        WHERE NOT exists(n.created_at)
+        RETURN n.id
+      CYPHER
+        Moku::Services::FetchReplyable.new.call URI.parse id
+      end
 
       txn.execute <<-CYPHER
         MATCH (partial:PartialReplyable)
