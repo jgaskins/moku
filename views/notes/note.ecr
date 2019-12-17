@@ -1,6 +1,6 @@
 <% note_url = "/notes/#{URI.encode_www_form note.id.to_s}" %>
 <meta property="og:title" content="Post from <%= author.display_name %> (@<%= author.handle %>@<%= author.id.host %>)" />
-<meta property="og:description" content="<%= note.content %>" />
+<meta property="og:description" content="<%= HTML.escape note.content %>" />
 
 <div>
   <% if author.icon %>
