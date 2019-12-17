@@ -425,6 +425,7 @@ module Moku
           # The notifications stream is the stream with the same ID as the user
           DB::GetNotesInStream.call "https://www.w3.org/ns/activitystreams#Public", current_user.try(&.id) do |(note, author, attachments, poll_options, i_liked, i_boosted)|
             render "timeline/entry"
+            response.flush
           end
         end
 
