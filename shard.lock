@@ -10,7 +10,7 @@ shards:
 
   awscr-s3:
     github: taylorfinnell/awscr-s3
-    version: 0.6.0
+    version: 0.7.0
 
   awscr-signer:
     github: taylorfinnell/awscr-signer
