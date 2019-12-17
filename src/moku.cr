@@ -612,6 +612,7 @@ end
 
 server = HTTP::Server.new([
   HTTP::LogHandler.new,
+  HTTP::CompressHandler.new,
   HTTP::MethodTranslation.new,
   HTTP::Session::RedisStore.new(
     key: "moku_session",
