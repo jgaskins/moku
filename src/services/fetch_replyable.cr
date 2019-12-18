@@ -28,6 +28,9 @@ module Moku
             cc: object.cc || %w[],
             poll_options: object.one_of,
           ]
+          if irt = object.in_reply_to
+            call irt
+          end
         else
           raise "Cannot reify: #{json}"
         end
