@@ -43,19 +43,12 @@ module DB
       @driver.read_transaction { |txn| yield txn }
     end
 
-    # exec_cast(query, {User, Group}, user_id: params["id"])
-    private def exec_cast(_query : String, _types : Tuple(*TYPES), **params) forall TYPES
-      exec_cast _query, _types, Neo4j::Map.from(params)
-    end
-
-    private def exec_cast(_query : String, _types : Tuple(*TYPES), **params, &) forall TYPES
-      exec_cast _query, _types, Neo4j::Map.from(params) do |row|
-        yield row
-      end
+    private def read_query(query, as types : Tuple(*T)) forall T
+      session(&.read_transaction(&.exec_cast(query, types)))
     end
 
     private def read_query(query, as types : Tuple(*T)) forall T
-      session(&.read_transaction(&.exec_cast(query, types)))
+      session(&.read_transaction(&.exec_cast(query, types) { |row| yield row }))
     end
 
     private def read_query(query, as types : Tuple(*T), parameters : Neo4j::Map) forall T
@@ -76,56 +69,6 @@ module DB
 
     private def write_query(query : String, as types : Tuple(*T), **parameters) forall T
       session(&.write_transaction(&.exec_cast(query, parameters, types)))
-    end
-
-    private def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map, &) forall TYPES
-      start = Time.utc
-      count = 0
-      session do |session|
-        error = nil
-        session.exec_cast query, params, types do |row|
-          count += 1
-          yield row unless error
-
-        # We need to receive all of the results, so let's just keep going until
-        # we pull everything, but remember that we had an error.
-        rescue ex
-          error = ex
-        end
-
-        if error
-          raise error
-        end
-      end
-    ensure
-      LOGGER.debug do
-        {
-          query: self.class.name,
-          cypher: query,
-          types: types,
-          params: params,
-          result_count: count,
-          execution_time: Time.utc - start.not_nil!,
-        }
-      end
-    end
-
-    private def exec_cast(query : String, types : Tuple(*TYPES), params : Neo4j::Map) forall TYPES
-      start = Time.utc
-      results = session do |session|
-        session.exec_cast query, params, types
-      end
-    ensure
-      LOGGER.debug do
-        {
-          query: self.class.name,
-          cypher: query,
-          types: types,
-          params: params,
-          result_count: results.try(&.size),
-          execution_time: Time.utc - start.not_nil!,
-        }
-      end
     end
 
     private def execute(_query : String, **params)
@@ -1030,7 +973,7 @@ module DB
 
   def self.ensure_indexes!
     puts "Ensuring indexes..."
-    DRIVER.session(&.write_transaction { |txn|
+    DRIVER.session do |session|
       # Unique indexes
       {
         LocalAccount: %w[id handle email],
@@ -1044,26 +987,26 @@ module DB
         Stream: %w[id],
       }.each do |label, properties|
         properties.each do |property|
-          txn.execute <<-CYPHER.tap { |query| puts query }
+          session.execute <<-CYPHER.tap { |query| puts query }
             CREATE CONSTRAINT ON (n:#{label}) ASSERT n.#{property} IS UNIQUE
           CYPHER
         end
       end
-    })
+    end
 
-    DRIVER.session(&.write_transaction { |txn|
+    DRIVER.session do |session|
       {
         Note: %w[created_at],
       }.each do |label, properties|
         properties.each do |property|
-          txn.execute <<-CYPHER.tap { |query| puts query }
+          session.execute <<-CYPHER.tap { |query| puts query }
             CREATE INDEX ON :#{label}(#{property})
           CYPHER
         end
       end
-    })
+    end
 
-    DRIVER.session(&.write_transaction { |txn|
+    DRIVER.session do |session|
       # Existence constraints
       {
         Account: %w[display_name handle],
@@ -1073,14 +1016,14 @@ module DB
         Person: %w[id],
       }.each do |label, properties|
         properties.each do |property|
-          txn.execute <<-CYPHER.tap { |query| puts query }
+          session.execute <<-CYPHER.tap { |query| puts query }
             CREATE CONSTRAINT ON (n:#{label}) ASSERT exists(n.#{property})
           CYPHER
         end
       end
 
       begin
-        # txn.execute <<-CYPHER.tap { |query| puts query }
+        # session.execute <<-CYPHER.tap { |query| puts query }
         #   CALL db.index.fulltext.createNodeIndex(
         #     'search_everything',
         #     ['Note', 'Account'],
@@ -1091,7 +1034,7 @@ module DB
       rescue ex : Neo4j::IndexAlreadyExists
         # We're good
       end
-    })
+    end
   end
 
   def self.run_migrations!
