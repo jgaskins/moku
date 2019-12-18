@@ -198,6 +198,7 @@ struct Moku::API
         {
           error: "Internal server error",
         }.to_json response
+        r.handled!
       end
 
       spawn Services::ReifyPartialAccounts.call
