@@ -3,7 +3,6 @@ require "logger"
 
 require "./models"
 require "./moku/config"
-require "./db/pool"
 
 require "./services/fetch_replyable"
 
