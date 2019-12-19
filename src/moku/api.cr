@@ -221,22 +221,7 @@ struct Moku::API
     end
 
     def handle_create(activity : ActivityPub::Activity)
-      object = activity.object.as(ActivityPub::Object | ActivityPub::Activity)
-      DB::PostNoteFromAccount[
-        account_id: activity.actor.as(URI),
-        id: object.id.not_nil!,
-        type: object.type || "Note",
-        content: object.content.as(String),
-        created_at: object.published || Time.utc,
-        summary: object.summary,
-        sensitive: object.sensitive || false,
-        url: object.url.not_nil!,
-        in_reply_to: object.in_reply_to,
-        attachments: (object.attachment || Array(ActivityPub::Activity).new).as(Array).map(&.as(ActivityPub::Activity)),
-        to: object.to || %w[],
-        cc: object.cc || %w[],
-        poll_options: object.one_of,
-      ]
+      Services::FetchReplyable.new.call activity.object.as(ActivityPub::Object | ActivityPub::Activity)
     end
 
     def handle_delete(activity : ActivityPub::Activity)

@@ -289,12 +289,16 @@ module Moku
         end
 
         r.on "notes" do
-          r.on :id do |id|
-            id = URI.parse(URI.decode_www_form(id))
+          r.on :id do |id_string|
+            id = URI.parse(URI.decode_www_form(id_string))
 
             r.is do
               DB::GetThreadFor.call id, current_user do |note, author, attachments, i_liked, i_boosted|
                 render "notes/note"
+              end
+
+              spawn do
+                Services::FetchReplyable.new.call id
               end
             end
 

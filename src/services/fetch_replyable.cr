@@ -10,8 +10,11 @@ module Moku
       def call(uri : URI)
         puts "#{self.class}: #{uri.inspect}"
         json = ActivityPub.get(uri).body
-        object = ActivityPub::Object.from_json(json)
 
+        call ActivityPub::Object.from_json(json)
+      end
+
+      def call(object : ActivityPub::Object | ActivityPub::Activity)
         if object.id
           DB::PostNoteFromAccount[
             account_id: object.attributed_to.as(URI),
@@ -21,18 +24,19 @@ module Moku
             created_at: object.published || Time.utc,
             summary: object.summary,
             sensitive: object.sensitive || false,
-            url: object.url.not_nil!,
+            url: (object.url || object.id).not_nil!,
             in_reply_to: object.in_reply_to,
             attachments: (object.attachment || Array(ActivityPub::Activity).new).as(Array).map(&.as(ActivityPub::Activity)),
             to: object.to || %w[],
             cc: object.cc || %w[],
             poll_options: object.one_of,
           ]
+          FetchRemoteAccount.new.call object.attributed_to.as(URI)
           if irt = object.in_reply_to
             call irt
           end
         else
-          raise "Cannot reify: #{json}"
+          raise "Cannot reify: #{object.to_json}"
         end
       end
 
