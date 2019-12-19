@@ -44,45 +44,126 @@ module DB
     end
 
     private def read_query(query, as types : Tuple(*T)) forall T
-      session(&.read_transaction(&.exec_cast(query, types)))
-    end
-
-    private def read_query(query, as types : Tuple(*T)) forall T
-      session(&.read_transaction(&.exec_cast(query, types) { |row| yield row }))
-    end
-
-    private def read_query(query, as types : Tuple(*T), parameters : Neo4j::Map) forall T
-      session(&.read_transaction(&.exec_cast(query, parameters, types)))
-    end
-
-    private def read_query(query : String) : Nil
-      session(&.read_transaction(&.execute(query)))
-    end
-
-    private def read_query(_query query, as types : Tuple(*T), **params, &) forall T
-      session(&.read_transaction(&.exec_cast(query, params, types) { |row| yield row }))
-    end
-
-    private def read_query(_query query, as types : Tuple(*T), **params) forall T
-      session(&.read_transaction(&.exec_cast(query, params, types)))
-    end
-
-    private def write_query(query : String, as types : Tuple(*T), **parameters) forall T
-      session(&.write_transaction(&.exec_cast(query, parameters, types)))
-    end
-
-    private def execute(_query : String, **params)
       start = Time.utc
-      results = session(&.execute(_query, **params))
+      results = session(&.read_transaction(&.exec_cast(query, types)))
     ensure
       LOGGER.debug do
         {
           query: self.class.name,
-          cypher: _query,
+          cypher: query,
           params: params,
           result_count: results.try(&.size),
           execution_time: Time.utc - start.not_nil!,
-        }
+        }.to_json
+      end
+    end
+
+    private def read_query(query, as types : Tuple(*T)) forall T
+      start = Time.utc
+      session(&.read_transaction(&.exec_cast(query, types) { |row| yield row }))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: params,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
+      end
+    end
+
+    private def read_query(query, as types : Tuple(*T), parameters : Neo4j::Map) forall T
+      start = Time.utc
+      results = session(&.read_transaction(&.exec_cast(query, parameters, types)))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: parameters,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
+      end
+    end
+
+    private def read_query(query : String) : Nil
+      start = Time.utc
+      session(&.read_transaction(&.execute(query)))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: params,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
+      end
+    end
+
+    private def read_query(_query query, as types : Tuple(*T), **params, &) forall T
+      start = Time.utc
+      count = 0
+      session(&.read_transaction(&.exec_cast(query, params, types) { |row|
+        yield row
+        count += 1
+      }))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: params,
+          result_count: count,
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
+      end
+    end
+
+    private def read_query(_query query, as types : Tuple(*T), **params) forall T
+      start = Time.utc
+      results = session(&.read_transaction(&.exec_cast(query, params, types)))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: params,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
+      end
+    end
+
+    private def write_query(query : String, as types : Tuple(*T), **parameters) forall T
+      start = Time.utc
+      results = session(&.write_transaction(&.exec_cast(query, parameters, types)))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: parameters,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
+      end
+    end
+
+    private def execute(_query query : String, **params)
+      start = Time.utc
+      results = session(&.execute(query, **params))
+    ensure
+      LOGGER.debug do
+        {
+          query: self.class.name,
+          cypher: query,
+          params: params,
+          result_count: results.try(&.size),
+          execution_time: Time.utc - start.not_nil!,
+        }.to_json
       end
     end
 
@@ -1105,5 +1186,73 @@ struct NamedTuple
       yield key, value, obj
     end
     obj
+  end
+end
+
+module Neo4j
+  struct Duration
+    def to_json(json : JSON::Builder) : Nil
+      json.string String.build { |str| to_json str }
+    end
+
+    def to_json(io : IO) : Nil
+      io << 'P'
+      io << months << 'M'
+      io << days << 'D'
+      io << 'T'
+      io << seconds << '.' << nanoseconds.to_s.rjust(9, '0') << 'S'
+    end
+  end
+
+  struct LatLng
+    def to_json(json : JSON::Builder) : Nil
+      json.string "(#{latitude}, #{longitude})"
+    end
+  end
+
+  struct Point2D
+    def to_json(json : JSON::Builder) : Nil
+      json.string "(#{x}, #{y})"
+    end
+  end
+
+  struct Point3D
+    def to_json(json : JSON::Builder) : Nil
+      json.object do
+        json.field "x", x
+        json.field "y", y
+        json.field "z", z
+      end
+    end
+  end
+
+  struct Node
+    def to_json(json : JSON::Builder) : Nil
+      json.string inspect
+    end
+  end
+
+  struct Relationship
+    def to_json(json : JSON::Builder) : Nil
+      json.string inspect
+    end
+  end
+
+  struct UnboundRelationship
+    def to_json(json : JSON::Builder) : Nil
+      json.string inspect
+    end
+  end
+
+  struct Path
+    def to_json(json : JSON::Builder) : Nil
+      json.string inspect
+    end
+  end
+end
+
+struct Time::Span
+  def to_json(json : JSON::Builder) : Nil
+    json.string inspect
   end
 end
