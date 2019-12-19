@@ -38,7 +38,7 @@ module ActivityPub
       summary_map: { type: Hash(String, String)?, key: "summaryMap" },
       tag: Object | Array(Object) | Nil,
       updated: Time?,
-      url: URI?,
+      url: { type: URI?, converter: FindURI },
       to: Array(String)?,
       bto: Array(String)?,
       cc: Array(String)?,
@@ -68,6 +68,46 @@ module ActivityPub
       @tag : Value? | Array(Value) = nil,
       @replies : Collection(Object)? = nil,
     )
+    end
+  end
+
+  # Sometimes you don't receive a URL as a string, but as an object. In this
+  # case, we need to traverse the object to find the URI string. For example:
+  #
+  #   {
+  #     "url": {
+  #       "href": "https://example.com/",
+  #     }
+  #   }
+  module FindURI
+    def self.from_json(json : JSON::PullParser) : URI?
+      case json.kind
+      when .string?
+        uri = URI.parse json.read_string
+      when .begin_object?
+        hash = json.read_object do |key|
+          case key
+          when "href"
+            uri = URI.parse json.read_string
+          else
+            json.read_raw
+          end
+        end
+      when .nil?
+        json.read_null
+        uri = nil
+      else
+        raise UnexpectedURIType.new("Don't know how to parse a URI from #{json.read_raw.inspect}")
+      end
+
+      uri
+    end
+
+    def self.to_json(uri : URI, json : JSON::Builder)
+      json.string uri.to_s
+    end
+
+    class UnexpectedURIType < ::Exception
     end
   end
 
