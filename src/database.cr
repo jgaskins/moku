@@ -722,17 +722,20 @@ module DB
         MERGE (op:Person { id: $op_id })
           ON CREATE SET op:PartialAccount
 
-        MERGE (op)-[:POSTED]->(note:Note {
-          id: $note_properties.id,
-          type: $note_properties.type,
-          summary: $note_properties.summary,
-          content: $note_properties.content,
-          created_at: $note_properties.created_at,
-          url: $note_properties.url,
-          to: $note_properties.to,
-          cc: $note_properties.cc,
-          sensitive: $note_properties.sensitive
-        })
+        WITH actor, op
+        MERGE (note:Replyable { id: $note_properties.id })
+        SET
+          note:Note,
+          note.type = $note_properties.type,
+          note.summary = $note_properties.summary,
+          note.content = $note_properties.content,
+          note.created_at = $note_properties.created_at,
+          note.url = $note_properties.url,
+          note.to = $note_properties.to,
+          note.cc = $note_properties.cc,
+          note.sensitive = $note_properties.sensitive
+
+        MERGE (op)-[:POSTED]->(note)
         MERGE (actor)-[boost:BOOSTED]->(note)
           ON CREATE SET
             boost.at = datetime(),
