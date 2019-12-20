@@ -1,15 +1,15 @@
-require "http"
 require "json"
 require "uri"
 
 require "../database"
+require "../activity_pub"
 
 module Moku
   module Services
     struct FetchRemoteAccount
       def call(uri : URI) : ::Account
         puts "#{self.class}: #{uri.inspect}"
-        body = HTTP::Client.get(uri, headers: HTTP::Headers { "Accept" => "application/ld+json" }).body
+        body = ActivityPub.get(uri).body
         json = JSON.parse(body)
 
         account = Account.new(

@@ -8,7 +8,7 @@ module JSON
 end
 
 module ActivityPub
-  def self.get(uri : String | URI, headers = HTTP::Headers { "Accept" => "application/json" })
+  def self.get(uri : String | URI, headers = HTTP::Headers { "Accept" => "application/activity+json, application/ld+json, application+json" })
     HTTP::Client.get(url: uri, headers: headers)
   end
 
