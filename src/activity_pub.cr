@@ -81,6 +81,8 @@ module ActivityPub
   #   }
   module FindURI
     def self.from_json(json : JSON::PullParser) : URI?
+      uri = nil
+
       case json.kind
       when .string?
         uri = URI.parse json.read_string
@@ -92,6 +94,11 @@ module ActivityPub
           else
             json.read_raw
           end
+        end
+      when .begin_array?
+        json.read_array do
+          value = from_json json
+          uri ||= value
         end
       when .nil?
         json.read_null
