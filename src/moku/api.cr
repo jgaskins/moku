@@ -235,7 +235,6 @@ struct Moku::API
 
     def handle_announce(activity : ActivityPub::Activity)
       json = HTTP::Client.get(activity.object.as(URI), headers: HTTP::Headers { "Accept" => "application/ld+json" }).body
-      # puts json
       note = ActivityPub::Object.from_json(json)
 
       DB::BoostNote[actor_id: activity.actor.as(URI), note: note, announcement: activity]
