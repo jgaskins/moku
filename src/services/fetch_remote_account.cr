@@ -9,7 +9,12 @@ module Moku
     struct FetchRemoteAccount
       def call(uri : URI) : ::Account
         puts "#{self.class}: #{uri.inspect}"
-        body = ActivityPub.get(uri).body
+        response = ActivityPub.get(uri)
+        if response.status.not_found?
+          raise AccountNotFound.new("The URI #{uri.inspect} does not point to a valid ActivityPub account")
+        end
+
+        body = response.body
         json = JSON.parse(body)
 
         account = Account.new(
@@ -51,6 +56,9 @@ module Moku
       def handle_image(image : String)
         URI.parse(image)
       end
+    end
+
+    class AccountNotFound < ::Exception
     end
   end
 end
