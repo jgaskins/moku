@@ -19,7 +19,7 @@ module Moku
 
         account = Account.new(
           id: URI.parse(json["id"].as_s),
-          display_name: (json["name"]? || json["preferredUsername"]).as_s,
+          display_name: json["name"]?.try(&.as_s?) || json["preferredUsername"].as_s,
           handle: json["preferredUsername"].as_s,
           summary: json["summary"]?.try(&.as_s?) || "",
           manually_approves_followers: json["manuallyApprovesFollowers"]?.try(&.as_bool?) || false,
