@@ -346,7 +346,7 @@ module ActivityPub
 
       def next : T | Stop
         if @current_index < @current_page.size
-          @current_page[@current_index].get.tap do
+          @current_page[@current_index].tap do
             @current_index += 1
           end
         elsif next_page_uri = @current_page.next
@@ -363,7 +363,7 @@ module ActivityPub
           total_items: { type: UInt64?, key: "totalItems" },
           next: URI?,
           part_of: { type: URI, key: "partOf" },
-          ordered_items: { type: Array(Concurrent::Future(T)), converter: URIFetcher(T), key: "orderedItems" },
+          ordered_items: { type: Array(T), key: "orderedItems" },
         )
 
         def size
@@ -385,7 +385,12 @@ module ActivityPub
         when .string?
           url = json.read_string
           values << future do
-            T.from_json(ActivityPub.get(url).body)
+            response = ActivityPub.get(url)
+            unless response.status.ok?
+              raise "Expected HTTP::Status::OK, got #{response.status.inspect}"
+            end
+            body = response.body
+            T.from_json(body)
           end
         when .begin_object?
           value = T.new(json)
