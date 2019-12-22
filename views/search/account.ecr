@@ -5,7 +5,7 @@
   <div><%= account.display_name %></div>
   <div>@<%= account.handle %>@<%= account.id.host %></div>
 
-  <% if pp i_follow %>
+  <% if i_follow %>
     <form action="/unfollow" method="POST">
       <input type="hidden" name="account_id" value="<%= account.id %>" />
       <button>Unfollow</button>

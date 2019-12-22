@@ -500,7 +500,7 @@ module Moku
     end
 
     private def show(result : Note, account : Nil, i_follow : Bool, response)
-      raise InvalidResult.new("Received a note with no author: #{result.inspect}")
+      puts "Missing author for note #{result.id.inspect}"
     end
 
     private def show(result : Account, account : Account, i_follow : Bool, response)
@@ -540,6 +540,41 @@ module Moku
             render "accounts/show"
           else
             render "not_found"
+          end
+        end
+      end
+    end
+  end
+
+  struct Admin
+    include Route
+
+    def initialize(@current_user : LocalAccount)
+    end
+
+    def call(context)
+      route context do |r, response, session|
+        r.root { render "admin/index" }
+
+        r.on "accounts" do
+          r.get do
+            render "admin/accounts/index"
+          end
+
+          r.on "local" do
+            r.get do
+              accounts = DB::GetLocalAccounts.call
+              render "admin/accounts/local"
+            end
+
+            r.get :handle do |handle|
+              if account = DB::GetLocalAccountWithHandle[handle]
+                pp account
+                render "admin/accounts/local/show"
+              else
+                response.redirect "#{r.original_path}/.."
+              end
+            end
           end
         end
       end

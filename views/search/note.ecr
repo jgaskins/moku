@@ -3,8 +3,27 @@
     <% if author.icon %>
       <img class="author avatar thumbnail" src="<%= author.icon %>"/>
     <% end %>
-    <%= author.display_name %>
-    <small>@<%= author.handle %>@<%= author.id.host %></small>
+    <a href="/accounts/<%= URI.encode_www_form author.id.to_s %>">
+      <%= author.display_name %>
+      <small>@<%= author.handle %>@<%= author.id.host %></small></a>
+    <a href="<%= author.id %>" style="display: inline-block; transform: rotate(-90deg)">⤵️</a>
   </div>
-  <div><%= note.content %></div>
+  <article>
+    <header>
+      <a href="/notes/<%= URI.encode_www_form note.id.to_s %>"><time><%= note.created_at %></time></a>
+      <a href="<%= note.id %>" style="display: inline-block; transform: rotate(-90deg)">⤵️</a>
+    </header>
+    <main>
+      <% unless note.summary.empty? %>
+        <details>
+          <summary><%= note.summary %></summary>
+      <% end %>
+
+      <%= note.content %>
+
+      <% unless note.summary.empty? %>
+        </details>
+      <% end %>
+    </main>
+  </article>
 </li>

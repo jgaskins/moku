@@ -1046,7 +1046,9 @@ module DB
     def call(query : String, searcher : LocalAccount?) : Array({Result, Account?, Bool})
       read_query <<-CYPHER, {Result, Account?, Bool}, query: query, my_id: searcher.try(&.id.to_s)
         CALL db.index.fulltext.queryNodes('search_everything', $query) YIELD node, score
-        MATCH (node)
+        WITH node, score
+        ORDER BY score DESC
+
         OPTIONAL MATCH (account)-[:POSTED]->(node)
         OPTIONAL MATCH (:LocalAccount { id: $my_id })-[follow:FOLLOWS]->(node)
         RETURN node, account, follow IS NOT NULL
@@ -1107,14 +1109,14 @@ module DB
       end
 
       begin
-        # session.execute <<-CYPHER.tap { |query| puts query }
-        #   CALL db.index.fulltext.createNodeIndex(
-        #     'search_everything',
-        #     ['Note', 'Account'],
-        #     ['display_name', 'handle', 'content', 'summary', 'id'],
-        #     { analyzer: 'english' }
-        #   )
-        # CYPHER
+        session.execute <<-CYPHER.tap { |query| puts query }
+          CALL db.index.fulltext.createNodeIndex(
+            'search_everything',
+            ['Note', 'Account'],
+            ['display_name', 'handle', 'content', 'summary', 'id'],
+            { analyzer: 'english' }
+          )
+        CYPHER
       rescue ex : Neo4j::IndexAlreadyExists
         # We're good
       end
