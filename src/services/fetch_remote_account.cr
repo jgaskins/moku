@@ -26,7 +26,7 @@ module Moku
           discoverable: json["discoverable"]?.try(&.as_bool?) || false,
           followers_url: URI.parse(json["followers"].as_s),
           inbox_url: URI.parse(json["inbox"].as_s),
-          shared_inbox: URI.parse((json["endpoints"]?.try { |endpoints| endpoints["sharedInbox"] } || json["inbox"]).as_s),
+          shared_inbox: URI.parse((json["endpoints"]?.try { |endpoints| endpoints["sharedInbox"]? } || json["inbox"]).as_s),
           icon: json["icon"]?.try { |icon| URI.parse(icon["url"].as_s) },
           image: json["image"]?.try { |image| handle_image image },
         )
