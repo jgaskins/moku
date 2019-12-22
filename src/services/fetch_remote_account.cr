@@ -28,6 +28,10 @@ module Moku
 
         DB::UpdatePerson[account]
         account
+      rescue ex : KeyError | TypeCastError
+        puts "JSON is not what we were expecting"
+        pp json.not_nil!
+        raise ex
       end
 
       def handle_image(image : JSON::Any)
