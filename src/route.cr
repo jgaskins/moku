@@ -40,9 +40,10 @@ module Route
       {% for method in methods %}
         def {{method.id.downcase}}
           return if handled?
+
           if @request.method == {{method.stringify.upcase}}
-            yield
-            handled!
+            puts "CHECKING {{method.id.upcase}}"
+            is { yield }
           end
         end
 
@@ -61,10 +62,17 @@ module Route
     def is(path : String = "")
       return if handled?
 
-      if path.sub(%r(\A/), "") == @request.path.sub(%r(\A/), "")
+      check_path = path.sub(%r(\A/), "")
+      actual = @request.path.sub(%r(\A/), "")
+
+      old_path = @request.path
+      if check_path == actual
+        @request.path = ""
         yield
         handled!
       end
+    ensure
+      @request.path = old_path if old_path
     end
 
     def is(path : Symbol)

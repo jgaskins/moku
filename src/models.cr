@@ -105,6 +105,10 @@ struct LocalAccount
     @node_id = -1
     @node_labels = %w[]
   end
+
+  def admin?
+    node_labels.includes? "Admin"
+  end
 end
 
 struct PartialAccount

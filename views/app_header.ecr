@@ -3,6 +3,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
+  body {
+    background: #333;
+    color: white;
+    font-family: Sans-Serif;
+  }
+
+  a {
+    color: #77f;
+  }
+
+  .app-header nav {
+    display: flex;
+    width: 100%;
+  }
+
+  .app-header nav a,
+  .app-header nav .logged-in-as,
+  .app-header nav form {
+  }
+
+  header.app-header nav .logout {
+    display: inline-block;
+  }
+
   .flash {
     padding: 1em 1.25em;
     border-width: 1px;
@@ -34,7 +58,7 @@
 
   .author.handle {
     font-size: 0.9em;
-    color: rgba(0,0,0,0.8);
+    color: rgba(255,255,255,0.8);
   }
 
   .author.avatar {
@@ -97,28 +121,34 @@
   }
 </style>
 
-<header>
-  <h1><a href="/">Moku</a></h1>
+<header class="app-header">
+  <h1><a href="/"><%= SELF.host %></a></h1>
+  <h2>Powered by <a href="https://github.com/jgaskins/moku">Moku</a></h2>
 
   <nav>
+    <a href="/home">🏠</a>
+    <a href="/notifications">🔔</a>
+    <a href="/timelines/public">🌎</a>
     <% if current_user %>
-      <div>Logged in as <%= current_user.handle %></div>
+      <div class="logged-in-as">@<%= current_user.handle %></div>
       <form action="/logout" method="POST">
         <input type="hidden" name="@method" value="DELETE"/>
-        <button>Logout</button>
+        <button>📴</button>
       </form>
     <% else %>
-      <div>
-        <a href="/login">Login</a> or <a href="/signup">sign up</a>
-      </div>
+      <a href="/login">👋</a>
+      <a href="/signup">🤝</a>
     <% end %>
-    <ul>
-      <li><a href="/notifications">Notifications</a></li>
-      <li><a href="/federated_timeline">Federated Timeline</a></li>
+    <% if current_user.try(&.admin?) %>
+      <a href="/admin">🦸</a>
+    <% end %>
     </ul>
   </nav>
 
   <form action="/search">
-    <input type="search" name="query" />
+    <label>
+      Search posts
+      <input type="search" name="query" value="<%= r.params["query"]?.to_s %>" />
+    </label>
   </form>
 </header>

@@ -1,0 +1,10 @@
+<ul>
+  <% accounts.each do |account| %>
+    <li>
+      <a href="<%= r.original_path %>/<%= account.handle %>">
+        <%= account.display_name %>
+        (@<%= account.handle %>)
+      </a>
+    </li>
+  <% end %>
+</ul>

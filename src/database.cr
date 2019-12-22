@@ -177,6 +177,15 @@ module DB
     end
   end
 
+  struct GetLocalAccounts < Query
+    def call : Array(LocalAccount)
+      read_query(<<-CYPHER, {LocalAccount}).map(&.first)
+        MATCH (acct:LocalAccount)
+        RETURN acct
+      CYPHER
+    end
+  end
+
   struct GetLocalAccountWithID < Query
     def call(id : String) : LocalAccount?
       user = nil

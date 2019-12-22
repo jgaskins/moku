@@ -68,6 +68,8 @@ module Moku
         render "app_header"
 
         if current_user_id && current_user
+          r.on "admin" { Admin.new(current_user).call context }
+
           r.get "home" do
             render "new_note"
 
