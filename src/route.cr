@@ -42,7 +42,6 @@ module Route
           return if handled?
 
           if @request.method == {{method.stringify.upcase}}
-            puts "CHECKING {{method.id.upcase}}"
             is { yield }
           end
         end
