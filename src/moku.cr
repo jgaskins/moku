@@ -65,6 +65,9 @@ module Moku
           current_user = DB::GetLocalAccountWithID[current_user_id.as_s]
         end
 
+        render_nav_link = Proc(String, String, String, String).new do |path, label, icon|
+          %{<a href="#{path}"><span class="nav-icon">#{icon}</span> <span class="nav-label">#{label}</span></a>}
+        end
         render "app_header"
 
         if current_user_id && current_user

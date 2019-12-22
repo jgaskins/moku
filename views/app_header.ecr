@@ -15,12 +15,23 @@
 
   .app-header nav {
     display: flex;
+    justify-content: space-between;
     width: 100%;
+  }
+
+  @media(max-width: 450px) {
+    .app-header .nav-label { display: none }
   }
 
   .app-header nav a,
   .app-header nav .logged-in-as,
+  .app-header nav button,
   .app-header nav form {
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1em;
   }
 
   header.app-header nav .logout {
@@ -126,21 +137,24 @@
   <h2>Powered by <a href="https://github.com/jgaskins/moku">Moku</a></h2>
 
   <nav>
-    <a href="/home">🏠</a>
-    <a href="/notifications">🔔</a>
-    <a href="/timelines/public">🌎</a>
+    <%= render_nav_link.call "/", "Home", "🏠" %>
+    <%= render_nav_link.call "/notifications", "Notifications", "🔔" %>
+    <%= render_nav_link.call "/federated_timeline", "Federated Timeline", "🌎" %>
     <% if current_user %>
       <div class="logged-in-as">@<%= current_user.handle %></div>
       <form action="/logout" method="POST">
         <input type="hidden" name="@method" value="DELETE"/>
-        <button>📴</button>
+        <button>
+          <span class="nav-icon">📴</span>
+          <span class="nav-label">Logout</span>
+        </button>
       </form>
     <% else %>
-      <a href="/login">👋</a>
-      <a href="/signup">🤝</a>
+      <%= render_nav_link.call "/login", "Login", "👋" %>
+      <%= render_nav_link.call "/signup", "Sign up", "🤝" %>
     <% end %>
     <% if current_user.try(&.admin?) %>
-      <a href="/admin">🦸</a>
+      <%= render_nav_link.call "/admin", "Admin", "🦸" %>
     <% end %>
     </ul>
   </nav>
