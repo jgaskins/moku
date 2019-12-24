@@ -252,28 +252,30 @@ struct Moku::API
     def call(context)
       route context do |r, response|
         r.on "2.0" do
-          node_info = DB::GetNodeInfo.call
+          r.get do
+            node_info = DB::GetNodeInfo.call
 
-          response.headers["Content-Type"] = "application/json"
-          {
-            "version": "2.0",
-            "software": {
-              "name": "moku",
-              "version": "0.1.0"
-            },
-            "protocols": [
-              "activitypub"
-            ],
-            "usage": {
-              "users": {
-                "total": node_info.total_users,
-                "activeMonth": node_info.monthly_active_users,
-                "activeHalfyear": node_info.half_yearly_active_users,
+            response.headers["Content-Type"] = "application/json"
+            {
+              "version": "2.0",
+              "software": {
+                "name": "moku",
+                "version": "0.1.0"
               },
-              "localPosts": node_info.local_posts,
-            },
-            "openRegistrations": node_info.open_registrations,
-          }.to_json response
+              "protocols": [
+                "activitypub"
+              ],
+              "usage": {
+                "users": {
+                  "total": node_info.total_users,
+                  "activeMonth": node_info.monthly_active_users,
+                  "activeHalfyear": node_info.half_yearly_active_users,
+                },
+                "localPosts": node_info.local_posts,
+              },
+              "openRegistrations": node_info.open_registrations,
+            }.to_json response
+          end
         end
 
         r.miss do
