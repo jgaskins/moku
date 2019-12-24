@@ -277,6 +277,7 @@ struct Moku::API
         end
 
         r.miss do
+          response.status = HTTP::Status::NOT_FOUND
           { error: "Unknown nodeinfo version" }.to_json response
         end
       end
