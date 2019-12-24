@@ -3,6 +3,7 @@ require "uri"
 
 require "../database"
 require "../activity_pub"
+require "./fetch_remote_account"
 
 module Moku
   module Services
