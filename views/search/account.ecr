@@ -2,8 +2,13 @@
   <% if account.icon %>
     <div><img class="avatar thumbnail" src="<%= account.icon %>"/></div>
   <% end %>
-  <div><%= account.display_name %></div>
-  <div>@<%= account.handle %>@<%= account.id.host %></div>
+  <div>
+    <a href="/accounts/remote/<%= URI.encode_www_form account.id.to_s %>">
+      <%= account.display_name %>
+      (@<%= account.handle %>@<%= account.id.host %>)
+    </a>
+    <%= RemoteLink.new(account.id) %>
+  </div>
 
   <% if i_follow %>
     <form action="/unfollow" method="POST">

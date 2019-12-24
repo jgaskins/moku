@@ -6,12 +6,12 @@
     <a href="/accounts/<%= URI.encode_www_form author.id.to_s %>">
       <%= author.display_name %>
       <small>@<%= author.handle %>@<%= author.id.host %></small></a>
-    <a href="<%= author.id %>" style="display: inline-block; transform: rotate(-90deg)">⤵️</a>
+    <%= RemoteLink.new(author.id) %>
   </div>
   <article>
     <header>
       <a href="/notes/<%= URI.encode_www_form note.id.to_s %>"><time><%= note.created_at %></time></a>
-      <a href="<%= note.id %>" style="display: inline-block; transform: rotate(-90deg)">⤵️</a>
+      <%= RemoteLink.new(note.id) %>
     </header>
     <main>
       <% unless note.summary.empty? %>

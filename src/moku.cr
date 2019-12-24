@@ -22,6 +22,8 @@ require "./services/webfinger"
 
 require "./file_upload"
 
+require "./components/remote_link"
+
 require "redis"
 class Cache
   def initialize(@redis : Redis::PooledClient, @logger : Logger)
