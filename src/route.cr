@@ -42,7 +42,8 @@ module Route
           return if handled?
 
           if @request.method == {{method.stringify.upcase}}
-            is { yield }
+            yield
+            handled!
           end
         end
 

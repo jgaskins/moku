@@ -562,19 +562,22 @@ module Moku
         r.root { render "admin/index" }
 
         r.on "accounts" do
-          r.get do
-            render "admin/accounts/index"
+          r.is do
+            r.get do
+              render "admin/accounts/index"
+            end
           end
 
           r.on "local" do
-            r.get do
-              accounts = DB::GetLocalAccounts.call
-              render "admin/accounts/local"
+            r.is do
+              r.get do
+                accounts = DB::GetLocalAccounts.call
+                render "admin/accounts/local"
+              end
             end
 
             r.get :handle do |handle|
               if account = DB::GetLocalAccountWithHandle[handle]
-                pp account
                 render "admin/accounts/local/show"
               else
                 response.redirect "#{r.original_path}/.."
