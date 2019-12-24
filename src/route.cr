@@ -11,8 +11,6 @@ module Route
   end
 
   macro render(template, to io = response)
-    # I'd like to have it render the template to the same IO as the layout, but
-    # I can't figure out how to do that yet.
     ECR.embed "views/{{template.id}}.ecr", {{io}}
   end
 
