@@ -141,7 +141,11 @@
     <%= render_nav_link.call "/notifications", "Notifications", "🔔" %>
     <%= render_nav_link.call "/federated_timeline", "Federated Timeline", "🌎" %>
     <% if current_user %>
-      <div class="logged-in-as">@<%= current_user.handle %></div>
+      <div class="logged-in-as">
+        <a href="/users/<%= current_user.handle %>">
+          @<%= current_user.handle %>
+        </a>
+      </div>
       <form action="/logout" method="POST">
         <input type="hidden" name="@method" value="DELETE"/>
         <button>
