@@ -166,7 +166,7 @@
   <form action="/search">
     <label>
       Search posts
-      <input type="search" name="query" value="<%= r.params["query"]?.to_s %>" />
+      <input type="search" name="query" value="<%= HTML.escape r.params["query"]?.to_s %>" />
     </label>
   </form>
 </header>
