@@ -1,4 +1,4 @@
-FROM crystallang/crystal:0.32.1
+FROM crystallang/crystal:0.32.1-alpine
 
 ADD . /moku
 WORKDIR /moku
