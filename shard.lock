@@ -2,11 +2,11 @@ version: 1.0
 shards:
   amq-protocol:
     github: cloudamqp/amq-protocol.cr
-    version: 0.3.3
+    version: 0.3.4
 
   amqp-client:
     github: cloudamqp/amqp-client.cr
-    version: 0.4.5
+    version: 0.5.6
 
   awscr-s3:
     github: taylorfinnell/awscr-s3
@@ -22,7 +22,7 @@ shards:
 
   neo4j:
     github: jgaskins/neo4j.cr
-    commit: 3605042df8706941c476961e07e9ba87ee89b8e2
+    commit: bdb6f14795c435d6a4544a0b520f8397303c47bc
 
   pool:
     github: ysbaddaden/pool
